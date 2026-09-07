@@ -3,6 +3,7 @@
 # Framework ใหม่: Mapping 3 files (Load Confirm, AP Data, AR Data)
 # =============================================================================
 
+import time
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -37,24 +38,54 @@ if not all_ready:
     st.info("👈 อัปโหลดครบ 3 ไฟล์ทางซ้าย แล้วกด Run Mapping")
     st.stop()
 
+
+def _fmt_elapsed(seconds: float) -> str:
+    """แปลงวินาที → 'X นาที Y วินาที' หรือ 'Y วินาที'"""
+    m, s = divmod(int(round(seconds)), 60)
+    if m > 0:
+        return f"{m} นาที {s} วินาที"
+    return f"{s} วินาที"
+
+
 # ── Run ──────────────────────────────────────────────────────────────────────
 if st.button("▶ Run Mapping", type="primary", use_container_width=True):
+    start_ts = time.time()
+    timer_box = st.empty()
+
     try:
-        with st.status("กำลังประมวลผล...", expanded=True) as box:
+        with st.status("⏱️ กำลังประมวลผล...", expanded=True) as box:
+
+            timer_box.markdown("### ⏱️ 0.0 วินาที")
             st.write("📂 อ่านไฟล์ทั้ง 3...")
             lc_df = v3io.read_load_confirm(lc_file)
             ap_df = v3io.read_ap_data(ap_file)
             ar_df = v3io.read_ar_data(ar_file)
             st.write(f"   Load Confirm: {len(lc_df):,} แถว | AP: {len(ap_df):,} | AR: {len(ar_df):,}")
+            timer_box.markdown(f"### ⏱️ {_fmt_elapsed(time.time() - start_ts)}")
 
             st.write("⚙️ Stage 1 → 2 → 3 (Pre-map → Final map → Return)...")
             result = pipeline.run(lc_df, ap_df, ar_df)
+            timer_box.markdown(f"### ⏱️ {_fmt_elapsed(time.time() - start_ts)}")
 
             st.write("📊 สรุปผล...")
             kpi = pipeline.get_kpi(result)
-            st.session_state["result"] = result
-            st.session_state["kpi"] = kpi
-            box.update(label="✅ เสร็จสิ้น!", state="complete")
+
+            elapsed = time.time() - start_ts
+            st.session_state["result"]  = result
+            st.session_state["kpi"]     = kpi
+            st.session_state["elapsed"] = elapsed
+
+            box.update(label=f"✅ เสร็จสิ้น! ใช้เวลา {_fmt_elapsed(elapsed)}", state="complete")
+
+        timer_box.empty()
+        try:
+            st.toast(f"✅ ประมวลผลเสร็จ! ใช้เวลา {_fmt_elapsed(elapsed)}", icon="🎉")
+        except Exception:
+            pass
+        st.success(f"🎉 ประมวลผลเสร็จสิ้น — ใช้เวลาทั้งหมด **{_fmt_elapsed(elapsed)}** "
+                   f"({elapsed:.1f} วินาที)")
+        st.balloons()
+
     except Exception as e:
         st.error(f"❌ เกิดข้อผิดพลาด: {e}")
         st.stop()
@@ -63,6 +94,9 @@ if st.button("▶ Run Mapping", type="primary", use_container_width=True):
 if "result" in st.session_state:
     result = st.session_state["result"]
     kpi = st.session_state["kpi"]
+
+    if "elapsed" in st.session_state:
+        st.caption(f"⏱️ เวลาประมวลผลล่าสุด: {_fmt_elapsed(st.session_state['elapsed'])}")
 
     st.divider()
     c1, c2, c3, c4 = st.columns(4)
