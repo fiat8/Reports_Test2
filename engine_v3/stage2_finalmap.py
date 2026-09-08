@@ -46,7 +46,7 @@ def build_ap_master_generic(ap_df: pd.DataFrame) -> pd.DataFrame:
     )
     df = ap_df[mask].copy()
     df["Pri-Columns"] = df.apply(keys.ap_pri_columns, axis=1)
-    main = df[["Pri-Columns", "Effective Date", "Expiration Date", "Rate"]].copy()
+    main = df[["Pri-Columns", "Effective Date", "Expiration Date", "Rate", "_ap_row"]].copy()
 
     # 2.5 SDFLAT transform → append (2.6)
     sd = ap_df[ap_df["Rate Code"].apply(lambda x: s(x).startswith(SDFLAT_START))].copy()
@@ -59,7 +59,7 @@ def build_ap_master_generic(ap_df: pd.DataFrame) -> pd.DataFrame:
         sd = sd[sd_mask]
         if not sd.empty:
             sd["Pri-Columns"] = sd.apply(keys.ap_pri_columns, axis=1)
-            sd_out = sd[["Pri-Columns", "Effective Date", "Expiration Date", "Rate"]]
+            sd_out = sd[["Pri-Columns", "Effective Date", "Expiration Date", "Rate", "_ap_row"]]
             main = pd.concat([main, sd_out], ignore_index=True)
 
     return main.drop_duplicates().reset_index(drop=True)
@@ -75,7 +75,7 @@ def build_ap_master_child(ap_df: pd.DataFrame) -> pd.DataFrame:
     )
     df = ap_df[mask].copy()
     df["Pri-Columns"] = df.apply(keys.ap_pri_columns, axis=1)
-    out = df[["Pri-Columns", "Effective Date", "Expiration Date", "Rate"]]
+    out = df[["Pri-Columns", "Effective Date", "Expiration Date", "Rate", "_ap_row"]]
     return out.drop_duplicates().reset_index(drop=True)
 
 
@@ -91,7 +91,7 @@ def build_ap_master_generic_noitem(ap_df: pd.DataFrame) -> pd.DataFrame:
     )
     df = ap_df[mask].copy()
     df["Pri-Columns2"] = df.apply(keys.ap_pri_columns_noitem, axis=1)
-    out = df[["Pri-Columns2", "Effective Date", "Expiration Date", "Rate"]]
+    out = df[["Pri-Columns2", "Effective Date", "Expiration Date", "Rate", "_ap_row"]]
     return out.drop_duplicates().reset_index(drop=True)
 
 
@@ -106,7 +106,7 @@ def build_ap_master_child_noitem(ap_df: pd.DataFrame) -> pd.DataFrame:
     )
     df = ap_df[mask].copy()
     df["Pri-Columns2"] = df.apply(keys.ap_pri_columns_noitem, axis=1)
-    out = df[["Pri-Columns2", "Effective Date", "Expiration Date", "Rate"]]
+    out = df[["Pri-Columns2", "Effective Date", "Expiration Date", "Rate", "_ap_row"]]
     return out.drop_duplicates().reset_index(drop=True)
 
 
@@ -121,7 +121,7 @@ def build_ar_master_normal(ar_df: pd.DataFrame) -> pd.DataFrame:
     mask = ar_df.apply(lambda r: s(r.get("CHARGE_ID")) not in STOP_CODES, axis=1)
     df = ar_df[mask].copy()
     df["Pri-Columns"] = df.apply(keys.ar_pri_columns, axis=1)
-    out = df[["Pri-Columns", "EFFECTIVEDATE", "EXPIRATIONDATE", "RATE"]]
+    out = df[["Pri-Columns", "EFFECTIVEDATE", "EXPIRATIONDATE", "RATE", "_ar_row"]]
     return out.drop_duplicates().reset_index(drop=True)
 
 
@@ -136,21 +136,25 @@ def _daterange_finalmap(
     eff_col: str,
     exp_col: str,
     rate_col: str,
+    row_col: str = "_ap_row",
+    row_prefix: str = "AP",
     pickup_col: str = "PickupConfirmed Date",
 ) -> pd.DataFrame:
     """
-    2.1-2.3 + 3.x: filter Load Confirm ที่ map เจอ AND date ตรง
-    Returns: main_key(distinct) + PickupDate + Rate + Final key
-             (เฉพาะแถวที่ Active = date ตรง)
+    date-range map + Row Indicator
+    Returns: Final key + Rate + Rate From (เช่น "AP-123 (พบ 3)")
 
-    M-Code:
-      Group by [key, PickupDate] → join master → Custom="Active"
-      ถ้า Eff ≤ Pickup ≤ Exp → filter Active → Final key
+    Logic:
+      1. join master → filter date ตรง (Eff ≤ Pickup ≤ Exp)
+      2. เอาแถวแรกตามลำดับต้นฉบับ (row_col น้อยสุด = บนสุด)
+      3. นับจำนวนที่ match (count) → ถ้า >1 ใส่ remark "(พบ N)"
     """
-    # distinct [key, pickup]
     grp = main[[main_key, pickup_col]].dropna(subset=[main_key]).drop_duplicates()
 
-    m = master[[master_key, eff_col, exp_col, rate_col]].copy()
+    cols = [master_key, eff_col, exp_col, rate_col]
+    if row_col in master.columns:
+        cols.append(row_col)
+    m = master[cols].copy()
     m[eff_col] = pd.to_datetime(m[eff_col], errors="coerce")
     m[exp_col] = pd.to_datetime(m[exp_col], errors="coerce")
 
@@ -159,38 +163,70 @@ def _daterange_finalmap(
     active = (pk >= merged[eff_col]) & (pk <= merged[exp_col])
     result = merged[active].copy()
 
-    # Final key = key + PickupDate (DD/MM/YYYY)
+    # Final key = key + PickupDate
     result["_pkstr"] = pd.to_datetime(result[pickup_col], errors="coerce").dt.strftime("%d/%m/%Y")
     result["Final key"] = result[main_key].astype(str) + result["_pkstr"].fillna("")
-    result = result[["Final key", rate_col]].drop_duplicates(subset=["Final key"])
-    return result.reset_index(drop=True)
+
+    if row_col not in result.columns:
+        # ไม่มี row → คืน rate อย่างเดียว
+        out = result[["Final key", rate_col]].drop_duplicates(subset=["Final key"])
+        return out.reset_index(drop=True)
+
+    # เรียงตาม row ต้นฉบับ (บนลงล่าง) เพื่อเอาแถวแรก
+    result = result.sort_values([main_key, "_pkstr", row_col])
+
+    # นับจำนวน match ต่อ Final key
+    counts = result.groupby("Final key").size()
+
+    # เอาแถวแรก (row น้อยสุด)
+    first = result.drop_duplicates(subset=["Final key"], keep="first").copy()
+
+    # ถ้าว่าง คืน empty ที่มี column ครบ
+    if first.empty:
+        return pd.DataFrame(columns=["Final key", rate_col, "_RateFrom"])
+
+    # สร้าง Rate From + remark
+    def _mk_from(row):
+        n = counts.get(row["Final key"], 1)
+        base = f"{row_prefix}-{int(row[row_col])}"
+        return f"{base} (พบ {n})" if n > 1 else base
+    first["_RateFrom"] = first.apply(_mk_from, axis=1)
+
+    out = first[["Final key", rate_col, "_RateFrom"]].reset_index(drop=True)
+    return out
 
 
 def ap_final_generic(main, ap_master_generic) -> pd.DataFrame:
-    """2.1 → 3.1: AP Generic final map → Final key + Rate"""
+    """2.1 → 3.1: AP Generic final map → Final key + Rate + Rate From"""
     out = _daterange_finalmap(
         main, ap_master_generic,
         main_key="Pri-AP", master_key="Pri-Columns",
         eff_col="Effective Date", exp_col="Expiration Date", rate_col="Rate",
+        row_col="_ap_row", row_prefix="AP",
     )
-    return out.rename(columns={"Rate": "AP Rate Charge (Generic)"})
+    return out.rename(columns={"Rate": "AP Rate Charge (Generic)",
+                               "_RateFrom": "AP Rate From (Generic)"})
 
 
 def ap_final_child(main, ap_master_child) -> pd.DataFrame:
-    """2.2 → 3.2: AP Child final map → Final key + Rate"""
+    """2.2 → 3.2: AP Child final map → Final key + Rate + Rate From"""
     out = _daterange_finalmap(
         main, ap_master_child,
         main_key="Pri-AP", master_key="Pri-Columns",
         eff_col="Effective Date", exp_col="Expiration Date", rate_col="Rate",
+        row_col="_ap_row", row_prefix="AP",
     )
-    return out.rename(columns={"Rate": "AP Rate Charge (Child)"})
+    return out.rename(columns={"Rate": "AP Rate Charge (Child)",
+                               "_RateFrom": "AP Rate From (Child)"})
 
 
 def ar_final_normal(main, ar_master_normal) -> pd.DataFrame:
-    """2.3 → 3.3: AR Normal final map → AR-Final key + Rate"""
-    # AR ใช้ AR-Pri + pickup
+    """2.3 → 3.3: AR Normal final map → AR-Final key + Rate + Rate From"""
     grp = main[["AR-Pri", "PickupConfirmed Date"]].dropna(subset=["AR-Pri"]).drop_duplicates()
-    m = ar_master_normal.copy()
+    cols = ["Pri-Columns", "EFFECTIVEDATE", "EXPIRATIONDATE", "RATE"]
+    if "_ar_row" in ar_master_normal.columns:
+        cols.append("_ar_row")
+    m = ar_master_normal[cols].copy()
     m["EFFECTIVEDATE"]  = pd.to_datetime(m["EFFECTIVEDATE"], errors="coerce")
     m["EXPIRATIONDATE"] = pd.to_datetime(m["EXPIRATIONDATE"], errors="coerce")
 
@@ -200,9 +236,21 @@ def ar_final_normal(main, ar_master_normal) -> pd.DataFrame:
     result = merged[active].copy()
     result["_pkstr"] = pk[active].dt.strftime("%d/%m/%Y")
     result["AR-Final key"] = result["AR-Pri"].astype(str) + result["_pkstr"].fillna("")
+
+    if "_ar_row" in result.columns:
+        result = result.sort_values(["AR-Pri", "_pkstr", "_ar_row"])
+        counts = result.groupby("AR-Final key").size()
+        first = result.drop_duplicates(subset=["AR-Final key"], keep="first").copy()
+        def _mk(row):
+            n = counts.get(row["AR-Final key"], 1)
+            base = f"AR-{int(row['_ar_row'])}"
+            return f"{base} (พบ {n})" if n > 1 else base
+        first["AR Rate From"] = first.apply(_mk, axis=1)
+        out = first[["AR-Final key", "RATE", "AR Rate From"]].reset_index(drop=True)
+        return out.rename(columns={"RATE": "AR Rate Charge"})
+
     result = result[["AR-Final key", "RATE"]].drop_duplicates(subset=["AR-Final key"])
-    result = result.rename(columns={"RATE": "AR Rate Charge"})
-    return result.reset_index(drop=True)
+    return result.rename(columns={"RATE": "AR Rate Charge"}).reset_index(drop=True)
 
 
 # =============================================================================
