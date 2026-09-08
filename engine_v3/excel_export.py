@@ -93,10 +93,15 @@ def to_styled_excel(df: pd.DataFrame, original_cols=None,
             letter = get_column_letter(idx)
             # ความยาวสูงสุดระหว่าง header กับข้อมูล (sample 500 แถวแรกเพื่อความเร็ว)
             max_len = len(str(col))
-            sample = df[col].head(500).astype(str)
-            if len(sample) > 0:
-                data_max = sample.map(len).max()
-                max_len = max(max_len, int(data_max))
+            try:
+                sample = df[col].head(500)
+                # แปลงเป็น string อย่างปลอดภัย (รองรับ date, number, NaN, pyarrow)
+                lengths = sample.apply(lambda v: len(str(v)) if v is not None and pd.notna(v) else 0)
+                if len(lengths) > 0:
+                    data_max = int(lengths.max())
+                    max_len = max(max_len, data_max)
+            except Exception:
+                pass  # ถ้าคอลัมน์มีปัญหา ใช้ความกว้าง header อย่างเดียว
             # จำกัดกว้างสุด 50 กันคอลัมน์ยาวเกิน
             ws.column_dimensions[letter].width = min(max_len + 2, 50)
 
