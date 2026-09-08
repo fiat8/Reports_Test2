@@ -22,6 +22,8 @@ def run(lc_df: pd.DataFrame, ap_df: pd.DataFrame, ar_df: pd.DataFrame) -> pd.Dat
 
     # Stage 3
     result = stage3_return.run(s1, s2)
+    # พา original Load Confirm columns ไปด้วย (สำหรับ styling ตอน export)
+    result.attrs["original_cols"] = lc_df.attrs.get("original_cols", [])
     return result
 
 
