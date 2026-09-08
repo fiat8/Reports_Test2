@@ -67,6 +67,7 @@ def read_load_confirm(file) -> pd.DataFrame:
 def read_ap_data(file) -> pd.DataFrame:
     """
     AP Data — 18 raw columns, drop 3 unused, parse dates
+    + เพิ่ม _ap_row = เลขแถวต้นฉบับ (เริ่ม 1, ไม่นับ header)
     """
     df = read_any(file)
     # ถ้า header ไม่ตรง ใช้ตำแหน่ง 18 คอลัมน์แรก
@@ -77,6 +78,9 @@ def read_ap_data(file) -> pd.DataFrame:
     for col in ["Effective Date", "Expiration Date"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+    # เลขแถวต้นฉบับ (สำหรับ Row Indicator) — เริ่มนับ 1
+    df = df.reset_index(drop=True)
+    df["_ap_row"] = range(1, len(df) + 1)
     return df
 
 
@@ -84,9 +88,12 @@ def read_ap_data(file) -> pd.DataFrame:
 def read_ar_data(file) -> pd.DataFrame:
     """
     AR Data — promote headers, parse dates
+    + เพิ่ม _ar_row = เลขแถวต้นฉบับ (เริ่ม 1)
     """
     df = read_any(file)
     for col in ["EFFECTIVEDATE", "EXPIRATIONDATE"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+    df = df.reset_index(drop=True)
+    df["_ar_row"] = range(1, len(df) + 1)
     return df
