@@ -46,9 +46,9 @@ def run(stage1: dict, stage2: dict) -> pd.DataFrame:
     main = _merge(main, stage1["ar_stop"],  "AR Stop", "Stop-Columns", ["AR Stop Charge"])
 
     # ── Stage 2: final map rate (join บน Final key) — WITH item type ───────
-    main = _merge(main, stage2["ap_final_generic"], "Final key",    "Final key",    ["AP Rate Charge (Generic)"])
-    main = _merge(main, stage2["ap_final_child"],   "Final key",    "Final key",    ["AP Rate Charge (Child)"])
-    main = _merge(main, stage2["ar_final_normal"],  "AR-Final key", "AR-Final key", ["AR Rate Charge"])
+    main = _merge(main, stage2["ap_final_generic"], "Final key",    "Final key",    ["AP Rate Charge (Generic)", "AP Rate From (Generic)"])
+    main = _merge(main, stage2["ap_final_child"],   "Final key",    "Final key",    ["AP Rate Charge (Child)", "AP Rate From (Child)"])
+    main = _merge(main, stage2["ar_final_normal"],  "AR-Final key", "AR-Final key", ["AR Rate Charge", "AR Rate From"])
 
     # ── Stage 2: FLAT fallback rate (join บน Final key2) — WITHOUT item ────
     if "ap_final_generic_noitem" in stage2:
@@ -58,14 +58,12 @@ def run(stage1: dict, stage2: dict) -> pd.DataFrame:
         main = _merge(main, stage2["ap_final_child_noitem"], "Final key2", "Final key2",
                       ["AP Rate Charge (Child) NoItem"])
 
-    # ── AP Rate Charge: Child > Generic, และ with > without (fallback) ────
+    # ── AP Rate Charge + AP Rate From: Child > Generic, with > without ────
     def _pick_ap_rate(row):
-        # ลำดับ: Child(with) > Generic(with) > Child(without) > Generic(without)
         if pd.notna(row.get("AP Rate Charge (Child)")):
             return row.get("AP Rate Charge (Child)")
         if pd.notna(row.get("AP Rate Charge (Generic)")):
             return row.get("AP Rate Charge (Generic)")
-        # fallback (เฉพาะ FLAT)
         if row.get("_is_flat"):
             if pd.notna(row.get("AP Rate Charge (Child) NoItem")):
                 return row.get("AP Rate Charge (Child) NoItem")
@@ -73,6 +71,15 @@ def run(stage1: dict, stage2: dict) -> pd.DataFrame:
                 return row.get("AP Rate Charge (Generic) NoItem")
         return None
     main["AP Rate Charge"] = main.apply(_pick_ap_rate, axis=1)
+
+    def _pick_ap_from(row):
+        # เลือก Rate From ให้ตรงกับ rate ที่เลือก
+        if pd.notna(row.get("AP Rate Charge (Child)")):
+            return row.get("AP Rate From (Child)")
+        if pd.notna(row.get("AP Rate Charge (Generic)")):
+            return row.get("AP Rate From (Generic)")
+        return None   # fallback noitem ยังไม่มี row indicator (เฟสถัดไป)
+    main["AP Rate From"] = main.apply(_pick_ap_from, axis=1)
 
     # ── Prime Status: mark with / without (เฉพาะ FLAT) ────────────────────
     # M-Code: Prime Status เดิม = Active/None
@@ -102,7 +109,12 @@ def run(stage1: dict, stage2: dict) -> pd.DataFrame:
     main["AP Rate Type"] = main.apply(_rate_type, axis=1)
 
     # ── ลบ working columns ────────────────────────────────────────────────
-    main = main.drop(columns=["_pickup_str", "Prime Status NoItem"], errors="ignore")
+    # ── ลบ working columns ────────────────────────────────────────────────
+    drop_cols = [
+        "_pickup_str", "Prime Status NoItem",
+        "AP Rate From (Generic)", "AP Rate From (Child)",  # รวมเป็น AP Rate From แล้ว
+    ]
+    main = main.drop(columns=[c for c in drop_cols if c in main.columns], errors="ignore")
 
     return main
 
