@@ -37,3 +37,25 @@ def test_carrier_has_carrier():
 
 def test_pickup_str_format():
     assert keys.pickup_str(BASE) == "16/05/2026"
+
+
+# ── FLAT Fallback tests ──────────────────────────────────────────────────────
+def test_is_flat_fallback():
+    assert keys.is_flat_fallback("FLAT") == True
+    assert keys.is_flat_fallback("FLATM") == True
+    assert keys.is_flat_fallback("FLATP") == True
+    assert keys.is_flat_fallback("SDFLAT") == False   # ขึ้นต้น SDFL
+    assert keys.is_flat_fallback("CASE") == False
+    assert keys.is_flat_fallback("CO") == False
+    assert keys.is_flat_fallback("DRAFTFLAT") == False
+
+def test_pri_ap_noitem_removes_item():
+    row = {**BASE, LC["charge_code"]: "FLATM"}
+    with_item = keys.build_pri_ap(row)
+    without = keys.build_pri_ap_noitem(row)
+    assert "CASE" in with_item
+    assert "CASE" not in without
+
+def test_noitem_no_replace():
+    # DRAFTFLAT ไม่เข้า fallback (ไม่ใช่ Left4=FLAT)
+    assert keys.is_flat_fallback("DRAFTFLAT") == False
