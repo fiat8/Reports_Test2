@@ -54,10 +54,58 @@ def _classify_column(col: str, original_cols: set) -> str:
     return "LC"
 
 
+# ── คอลัมน์ภายในที่ซ่อน (working keys / helper) ──────────────────────────────
+HIDDEN_COLUMNS = {
+    "_is_flat", "_pickup_str", "_ap_row", "_ar_row",
+    "Pri-AP", "Pri-AP2", "Mandate Key", "Sup-Carrier", "Sup-Truck", "AP Stop",
+    "AR-Pri", "AR-Pri2", "AR Stop",
+    "Final key", "Final key2", "AR-Final key", "AR-Final key2",
+    "AP Rate Charge (Generic)", "AP Rate Charge (Child)",
+    "AP Rate Charge (Generic) NoItem", "AP Rate Charge (Child) NoItem",
+    "Prime Status NoItem",
+}
+
+
+def arrange_columns(df, original_cols=None, hide_working=True):
+    """
+    จัดลำดับคอลัมน์เป็น 3 โซน:
+      1. Load Confirm เดิม (ตามลำดับต้นฉบับ)
+      2. AP (key/status/rate/from)
+      3. AR (key/status/rate/from)
+    + ซ่อน working columns (ถ้า hide_working=True)
+    """
+    original_cols = list(original_cols) if original_cols else []
+    orig_set = set(original_cols)
+
+    cols = list(df.columns)
+    if hide_working:
+        cols = [c for c in cols if c not in HIDDEN_COLUMNS]
+
+    lc_cols, ap_cols, ar_cols = [], [], []
+    for c in cols:
+        g = _classify_column(str(c), orig_set)
+        if g == "LC":
+            lc_cols.append(c)
+        elif g == "AP":
+            ap_cols.append(c)
+        else:
+            ar_cols.append(c)
+
+    # LC เรียงตามลำดับต้นฉบับก่อน แล้วตัวที่เหลือ
+    lc_ordered = [c for c in original_cols if c in lc_cols]
+    lc_ordered += [c for c in lc_cols if c not in orig_set]
+
+    final_order = lc_ordered + ap_cols + ar_cols
+    # เผื่อมีคอลัมน์ตกหล่น
+    final_order += [c for c in df.columns if c in cols and c not in final_order]
+    return df[final_order]
+
+
 def to_styled_excel(df: pd.DataFrame, original_cols=None,
-                    sheet_name: str = "Result") -> bytes:
+                    sheet_name: str = "Result", hide_working: bool = True) -> bytes:
     """
     Export DataFrame เป็น Excel พร้อม:
+      - จัดลำดับคอลัมน์ 3 โซน (LC → AP → AR) + ซ่อน working keys
       - header สี 3 กลุ่ม (LC/AP/AR) ตัวอักษรขาว
       - auto-width ทุกคอลัมน์
     original_cols: set ของชื่อคอลัมน์ Load Confirm เดิม (ถ้า None = เดาจาก hint)
@@ -66,6 +114,9 @@ def to_styled_excel(df: pd.DataFrame, original_cols=None,
         original_cols = set()
     else:
         original_cols = set(original_cols)
+
+    # จัดลำดับ + ซ่อน working columns
+    df = arrange_columns(df, original_cols=original_cols, hide_working=hide_working)
 
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
