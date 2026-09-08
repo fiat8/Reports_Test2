@@ -14,7 +14,7 @@ from engine_v3 import pipeline
 st.set_page_config(page_title="Billing Reconcile", page_icon="📊", layout="wide")
 
 st.title("📊 Billing Reconcile")
-st.caption("เวอร์ชันทดลอง")
+st.caption("AR/AP Mapping — BRF Logistics Co., Ltd.")
 
 # ── Sidebar: upload 3 files ──────────────────────────────────────────────────
 st.sidebar.header("📂 อัปโหลดข้อมูล 3 ไฟล์")
@@ -120,13 +120,12 @@ if "result" in st.session_state:
 
     st.divider()
 
-    def _to_excel(df):
-        buf = BytesIO()
-        with pd.ExcelWriter(buf, engine="openpyxl") as w:
-            df.to_excel(w, index=False, sheet_name="Result")
-        return buf.getvalue()
+    from engine_v3.excel_export import to_styled_excel
 
-    st.download_button("📥 ดาวน์โหลดรายงาน (.xlsx)", data=_to_excel(result),
+    original_cols = result.attrs.get("original_cols", [])
+    excel_bytes = to_styled_excel(result, original_cols=original_cols)
+
+    st.download_button("📥 ดาวน์โหลดรายงาน (.xlsx)", data=excel_bytes,
         file_name="Reconcile_Output.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True)
