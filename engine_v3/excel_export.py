@@ -54,13 +54,10 @@ def _classify_column(col: str, original_cols: set) -> str:
     return "LC"
 
 
-# ── คอลัมน์ภายในที่ซ่อน (เฉพาะ helper จริงๆ — key map ยังแสดง) ────────────────
+# ── คอลัมน์ภายในที่ซ่อนเสมอ (helper ล้วนๆ ที่ไม่มีความหมาย) ──────────────────
+# เก็บทุกอย่างอื่นไว้ (key map + intermediate rate ตาม requirement "ครบทุกคอลัมน์")
 HIDDEN_COLUMNS = {
     "_is_flat", "_pickup_str", "_ap_row", "_ar_row",
-    "Prime Status NoItem",
-    # intermediate rate (รวมเป็น AP Rate Charge แล้ว)
-    "AP Rate Charge (Generic)", "AP Rate Charge (Child)",
-    "AP Rate Charge (Generic) NoItem", "AP Rate Charge (Child) NoItem",
 }
 
 

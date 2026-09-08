@@ -187,9 +187,7 @@ def _daterange_finalmap(
 
     # สร้าง Rate From + remark
     def _mk_from(row):
-        n = counts.get(row["Final key"], 1)
-        base = f"{row_prefix}-{int(row[row_col])}"
-        return f"{base} (พบ {n})" if n > 1 else base
+        return f"{row_prefix}-{int(row[row_col])}"
     first["_RateFrom"] = first.apply(_mk_from, axis=1)
 
     out = first[["Final key", rate_col, "_RateFrom"]].reset_index(drop=True)
@@ -242,9 +240,7 @@ def ar_final_normal(main, ar_master_normal) -> pd.DataFrame:
         counts = result.groupby("AR-Final key").size()
         first = result.drop_duplicates(subset=["AR-Final key"], keep="first").copy()
         def _mk(row):
-            n = counts.get(row["AR-Final key"], 1)
-            base = f"AR-{int(row['_ar_row'])}"
-            return f"{base} (พบ {n})" if n > 1 else base
+            return f"AR-{int(row['_ar_row'])}"
         first["AR Rate From"] = first.apply(_mk, axis=1)
         out = first[["AR-Final key", "RATE", "AR Rate From"]].reset_index(drop=True)
         return out.rename(columns={"RATE": "AR Rate Charge"})
