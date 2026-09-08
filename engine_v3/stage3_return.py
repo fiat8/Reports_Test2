@@ -31,6 +31,10 @@ def run(stage1: dict, stage2: dict) -> pd.DataFrame:
 
     # ── Stage 1: AP 6 status ──────────────────────────────────────────────
     main = _merge(main, stage1["ap_prime"],       "Pri-AP",      "Pri-Columns", ["Prime Status"])
+    # FLAT fallback: prime without item type
+    if "ap_prime_noitem" in stage1:
+        main = _merge(main, stage1["ap_prime_noitem"], "Pri-AP2", "Pri-Columns2",
+                      ["Prime Status NoItem"])
     main = _merge(main, stage1["ap_prime_child"], "Pri-AP",      "Pri-Columns", ["Child Status"])
     main = _merge(main, stage1["ap_mandatory"],   "Mandate Key", "Mandate-key", ["Mandatory Status"])
     main = _merge(main, stage1["ap_carrier"],     "Sup-Carrier", "Sub-key2",    ["Carrier Status"])
@@ -41,39 +45,78 @@ def run(stage1: dict, stage2: dict) -> pd.DataFrame:
     main = _merge(main, stage1["ar_prime"], "AR-Pri",  "Pri-Columns",  ["AR Prime Status"])
     main = _merge(main, stage1["ar_stop"],  "AR Stop", "Stop-Columns", ["AR Stop Charge"])
 
-    # ── Stage 2: final map rate (join บน Final key) ───────────────────────
+    # ── Stage 2: final map rate (join บน Final key) — WITH item type ───────
     main = _merge(main, stage2["ap_final_generic"], "Final key",    "Final key",    ["AP Rate Charge (Generic)"])
     main = _merge(main, stage2["ap_final_child"],   "Final key",    "Final key",    ["AP Rate Charge (Child)"])
     main = _merge(main, stage2["ar_final_normal"],  "AR-Final key", "AR-Final key", ["AR Rate Charge"])
 
-    # ── AP Rate Charge: เลือก Child > Generic ─────────────────────────────
+    # ── Stage 2: FLAT fallback rate (join บน Final key2) — WITHOUT item ────
+    if "ap_final_generic_noitem" in stage2:
+        main = _merge(main, stage2["ap_final_generic_noitem"], "Final key2", "Final key2",
+                      ["AP Rate Charge (Generic) NoItem"])
+    if "ap_final_child_noitem" in stage2:
+        main = _merge(main, stage2["ap_final_child_noitem"], "Final key2", "Final key2",
+                      ["AP Rate Charge (Child) NoItem"])
+
+    # ── AP Rate Charge: Child > Generic, และ with > without (fallback) ────
     def _pick_ap_rate(row):
+        # ลำดับ: Child(with) > Generic(with) > Child(without) > Generic(without)
         if pd.notna(row.get("AP Rate Charge (Child)")):
             return row.get("AP Rate Charge (Child)")
-        return row.get("AP Rate Charge (Generic)")
+        if pd.notna(row.get("AP Rate Charge (Generic)")):
+            return row.get("AP Rate Charge (Generic)")
+        # fallback (เฉพาะ FLAT)
+        if row.get("_is_flat"):
+            if pd.notna(row.get("AP Rate Charge (Child) NoItem")):
+                return row.get("AP Rate Charge (Child) NoItem")
+            if pd.notna(row.get("AP Rate Charge (Generic) NoItem")):
+                return row.get("AP Rate Charge (Generic) NoItem")
+        return None
     main["AP Rate Charge"] = main.apply(_pick_ap_rate, axis=1)
+
+    # ── Prime Status: mark with / without (เฉพาะ FLAT) ────────────────────
+    # M-Code: Prime Status เดิม = Active/None
+    #   ถ้า match with item type       → "Active with"
+    #   ถ้า fallback without item type  → "Active without"
+    def _prime_status(row):
+        with_active = row.get("Prime Status") == "Active"
+        if with_active:
+            # ถ้าเป็น FLAT ที่ผ่าน fallback path ให้ระบุ with
+            if row.get("_is_flat"):
+                return "Active with"
+            return "Active"
+        # with ไม่เจอ — ลอง fallback (เฉพาะ FLAT)
+        if row.get("_is_flat") and row.get("Prime Status NoItem") == "Active":
+            return "Active without"
+        return row.get("Prime Status")  # None / เดิม
+    main["Prime Status"] = main.apply(_prime_status, axis=1)
 
     # ── AP Rate Type ──────────────────────────────────────────────────────
     def _rate_type(row):
+        ps = row.get("Prime Status")
         if row.get("Child Status") == "Active":
             return "Child"
-        elif row.get("Prime Status") == "Active":
+        elif ps in ("Active", "Active with", "Active without"):
             return "Generic"
         return ""
     main["AP Rate Type"] = main.apply(_rate_type, axis=1)
 
     # ── ลบ working columns ────────────────────────────────────────────────
-    main = main.drop(columns=["_pickup_str"], errors="ignore")
+    main = main.drop(columns=["_pickup_str", "Prime Status NoItem"], errors="ignore")
 
     return main
 
 
 def get_kpi(df: pd.DataFrame) -> dict:
-    total   = len(df)
-    matched = (df.get("Prime Status", pd.Series(dtype=object)) == "Active").sum()
+    total  = len(df)
+    ps     = df.get("Prime Status", pd.Series(dtype=object))
+    active_vals = {"Active", "Active with", "Active without"}
+    matched = ps.isin(active_vals).sum()
+    fallback = (ps == "Active without").sum()
     return {
         "total":     int(total),
         "matched":   int(matched),
         "unmatched": int(total - matched),
+        "fallback":  int(fallback),
         "match_pct": round(matched / total * 100, 1) if total else 0,
     }

@@ -30,6 +30,13 @@ GENERIC_MARKER      = "GENERIC"          # Rate Tariff ID มีคำนี้ 
 SDFLAT_PREFIX = "SDFLAT_"
 SDFLAT_START  = "SDFLAT"
 
+# ── FLAT Fallback (without item type) ────────────────────────────────────────
+# Trigger: charge code ที่ Left 4 = "FLAT" (FLAT, FLATM, FLATP, FLATB, ...)
+# หมายเหตุ: SDFLAT ขึ้นต้น "SDFL" จึงไม่เข้าเงื่อนไขนี้ (ถูกต้อง)
+FLAT_FALLBACK_PREFIX = "FLAT"    # Left 4 characters
+STATUS_WITH    = "Active with"
+STATUS_WITHOUT = "Active without"
+
 # ── Key building (Load Confirm side) ─────────────────────────────────────────
 # Pri-AP = OrigZone + DestZone + Carrier + Service + ItemType + Charge + RateCode
 DRAFTFLAT_CODE   = "DRAFTFLAT"

@@ -79,6 +79,37 @@ def build_ap_master_child(ap_df: pd.DataFrame) -> pd.DataFrame:
     return out.drop_duplicates().reset_index(drop=True)
 
 
+def build_ap_master_generic_noitem(ap_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    AP Master Generic (without item type) — FLAT fallback
+    Pri-Columns2 → Eff/Exp/Rate. filter GENERIC + FLAT charge
+    """
+    mask = ap_df.apply(
+        lambda r: _not_custpickup(r) and _is_generic(r) and _not_stop(r)
+        and keys.is_flat_fallback(r.get("Charge Code")),
+        axis=1,
+    )
+    df = ap_df[mask].copy()
+    df["Pri-Columns2"] = df.apply(keys.ap_pri_columns_noitem, axis=1)
+    out = df[["Pri-Columns2", "Effective Date", "Expiration Date", "Rate"]]
+    return out.drop_duplicates().reset_index(drop=True)
+
+
+def build_ap_master_child_noitem(ap_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    AP Master Child (without item type) — FLAT fallback
+    """
+    mask = ap_df.apply(
+        lambda r: _not_custpickup(r) and (not _is_generic(r)) and _not_stop(r)
+        and keys.is_flat_fallback(r.get("Charge Code")),
+        axis=1,
+    )
+    df = ap_df[mask].copy()
+    df["Pri-Columns2"] = df.apply(keys.ap_pri_columns_noitem, axis=1)
+    out = df[["Pri-Columns2", "Effective Date", "Expiration Date", "Rate"]]
+    return out.drop_duplicates().reset_index(drop=True)
+
+
 # =============================================================================
 # 2.7 AR Master (Normal)
 # =============================================================================
@@ -177,13 +208,70 @@ def ar_final_normal(main, ar_master_normal) -> pd.DataFrame:
 # =============================================================================
 # รวม Stage 2
 # =============================================================================
+def ap_final_generic_noitem(main, ap_master_generic_ni) -> pd.DataFrame:
+    """FLAT fallback: AP Generic without item type → Final key2 + Rate"""
+    out = _daterange_finalmap(
+        main, ap_master_generic_ni,
+        main_key="Pri-AP2", master_key="Pri-Columns2",
+        eff_col="Effective Date", exp_col="Expiration Date", rate_col="Rate",
+    )
+    return out.rename(columns={"Rate": "AP Rate Charge (Generic) NoItem",
+                               "Final key": "Final key2"})
+
+
+def ap_final_child_noitem(main, ap_master_child_ni) -> pd.DataFrame:
+    """FLAT fallback: AP Child without item type → Final key2 + Rate"""
+    out = _daterange_finalmap(
+        main, ap_master_child_ni,
+        main_key="Pri-AP2", master_key="Pri-Columns2",
+        eff_col="Effective Date", exp_col="Expiration Date", rate_col="Rate",
+    )
+    return out.rename(columns={"Rate": "AP Rate Charge (Child) NoItem",
+                               "Final key": "Final key2"})
+
+
+def _daterange_finalmap_key2(main, master, main_key, master_key,
+                             eff_col, exp_col, rate_col,
+                             pickup_col="PickupConfirmed Date"):
+    """เหมือน _daterange_finalmap แต่ output ชื่อ Final key2"""
+    grp = main[[main_key, pickup_col]].dropna(subset=[main_key]).drop_duplicates()
+    m = master[[master_key, eff_col, exp_col, rate_col]].copy()
+    m[eff_col] = pd.to_datetime(m[eff_col], errors="coerce")
+    m[exp_col] = pd.to_datetime(m[exp_col], errors="coerce")
+    merged = grp.merge(m, left_on=main_key, right_on=master_key, how="left")
+    pk = pd.to_datetime(merged[pickup_col], errors="coerce")
+    active = (pk >= merged[eff_col]) & (pk <= merged[exp_col])
+    result = merged[active].copy()
+    result["_pkstr"] = pd.to_datetime(result[pickup_col], errors="coerce").dt.strftime("%d/%m/%Y")
+    result["Final key2"] = result[main_key].astype(str) + result["_pkstr"].fillna("")
+    result = result[["Final key2", rate_col]].drop_duplicates(subset=["Final key2"])
+    return result.reset_index(drop=True)
+
+
 def run(main: pd.DataFrame, ap_df: pd.DataFrame, ar_df: pd.DataFrame) -> dict:
     ap_gen = build_ap_master_generic(ap_df)
     ap_chd = build_ap_master_child(ap_df)
     ar_nrm = build_ar_master_normal(ar_df)
 
+    # FLAT fallback masters (without item type)
+    ap_gen_ni = build_ap_master_generic_noitem(ap_df)
+    ap_chd_ni = build_ap_master_child_noitem(ap_df)
+
+    # fallback final maps (ใช้ helper key2)
+    fb_gen = _daterange_finalmap_key2(
+        main, ap_gen_ni, "Pri-AP2", "Pri-Columns2",
+        "Effective Date", "Expiration Date", "Rate",
+    ).rename(columns={"Rate": "AP Rate Charge (Generic) NoItem"})
+    fb_chd = _daterange_finalmap_key2(
+        main, ap_chd_ni, "Pri-AP2", "Pri-Columns2",
+        "Effective Date", "Expiration Date", "Rate",
+    ).rename(columns={"Rate": "AP Rate Charge (Child) NoItem"})
+
     return {
         "ap_final_generic": ap_final_generic(main, ap_gen),
         "ap_final_child":   ap_final_child(main, ap_chd),
         "ar_final_normal":  ar_final_normal(main, ar_nrm),
+        # FLAT fallback
+        "ap_final_generic_noitem": fb_gen,
+        "ap_final_child_noitem":   fb_chd,
     }

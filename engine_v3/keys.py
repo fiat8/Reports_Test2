@@ -9,7 +9,7 @@
 import pandas as pd
 from engine_v3.config import (
     LC, DRAFTFLAT_CODE, DRAFTFLAT_FROM, DRAFTFLAT_TO,
-    CO_CODE, AR_CO_MARKER, DATE_EN_AU,
+    CO_CODE, AR_CO_MARKER, DATE_EN_AU, FLAT_FALLBACK_PREFIX,
 )
 
 
@@ -20,6 +20,15 @@ def s(val) -> str:
     if isinstance(val, float) and val.is_integer():
         return str(int(val))
     return str(val)
+
+
+def is_flat_fallback(charge_code) -> bool:
+    """
+    เช็คว่า charge code เข้าเงื่อนไข FLAT fallback หรือไม่
+    Left 4 = "FLAT" (FLAT, FLATM, FLATP, FLATB, FLATP_OVR ...)
+    SDFLAT ไม่เข้า (ขึ้นต้น SDFL)
+    """
+    return s(charge_code)[:4].upper() == FLAT_FALLBACK_PREFIX
 
 
 # =============================================================================
@@ -48,6 +57,35 @@ def build_pri_ap(row) -> str:
         + _ap_item_type_lc(row) + s(row.get(LC["charge_code"]))
         + _rate_code_lc(row)
     )
+
+
+def build_pri_ap_noitem(row) -> str:
+    """
+    Pri-AP2 (without item type) = OrigZone+DestZone+Carrier+Service+Charge+RateCode
+    ตัด item type ออก (เหมือน CO) — ไม่ replace value
+    ใช้เฉพาะ charge ที่ Left4 = FLAT (fallback)
+    """
+    return (
+        s(row.get(LC["orig_zone"])) + s(row.get(LC["dest_zone"]))
+        + s(row.get(LC["carrier"])) + s(row.get(LC["service"]))
+        + s(row.get(LC["charge_code"])) + _rate_code_lc(row)
+    )
+
+
+def build_ar_pri_noitem(row) -> str:
+    """
+    AR-Pri2 (without item type) สำหรับ FLAT fallback
+    normal case: custCode + custService + chargeCode + rateCodeRaw
+    (AR-Pri ปกติไม่มี item type อยู่แล้วในเคส normal — แต่ทำ key2 คู่ไว้
+     เพื่อความสม่ำเสมอกับ AP fallback)
+    หมายเหตุ: AR-Pri เดิมไม่ได้ใส่ item type ในเคส normal
+             key นี้จึงเท่ากับ AR-Pri เดิมในเคส normal
+             (ต่างเฉพาะกรณีที่ AR-Pri เดิมมี item เช่น DRAFTFLAT ซึ่ง fallback ไม่แตะ)
+    """
+    charge = s(row.get(LC["charge_code"]))
+    raw = s(row.get(LC["rate_code"]))
+    return (s(row.get(LC["cust_code"])) + s(row.get(LC["cust_service"]))
+            + charge + raw)
 
 
 def build_mandate_lc(row) -> str:
@@ -127,6 +165,13 @@ def add_load_confirm_keys(df: pd.DataFrame) -> pd.DataFrame:
     df["_pickup_str"]  = df.apply(pickup_str, axis=1)
     df["Final key"]    = df["Pri-AP"] + df["_pickup_str"]
     df["AR-Final key"] = df["AR-Pri"] + df["_pickup_str"]
+
+    # ── FLAT Fallback keys (without item type) ────────────────────────────
+    df["_is_flat"]      = df.apply(lambda r: is_flat_fallback(r.get(LC["charge_code"])), axis=1)
+    df["Pri-AP2"]       = df.apply(build_pri_ap_noitem, axis=1)
+    df["AR-Pri2"]       = df.apply(build_ar_pri_noitem, axis=1)
+    df["Final key2"]    = df["Pri-AP2"] + df["_pickup_str"]
+    df["AR-Final key2"] = df["AR-Pri2"] + df["_pickup_str"]
     return df
 
 
@@ -138,6 +183,14 @@ def ap_pri_columns(row) -> str:
     return "".join(s(row.get(c)) for c in [
         "Origin Zone Code", "Dest. Zone Code", "Carrier ID",
         "Service ID", "Item Type", "Charge Code", "Rate Code",
+    ])
+
+
+def ap_pri_columns_noitem(row) -> str:
+    """Pri-Columns2 (without item type) = OrigZone+DestZone+Carrier+Service+Charge+RateCode"""
+    return "".join(s(row.get(c)) for c in [
+        "Origin Zone Code", "Dest. Zone Code", "Carrier ID",
+        "Service ID", "Charge Code", "Rate Code",
     ])
 
 
@@ -168,6 +221,15 @@ def ap_stop_columns(row) -> str:
 def ar_pri_columns(row) -> str:
     return "".join(s(row.get(c)) for c in
                    ["CUST_CD", "SERVICE_ID", "CHARGE_ID", "RATECODE"])
+
+
+def ar_pri_columns_noitem(row) -> str:
+    """
+    AR Pri-Columns2 (without item type)
+    AR master ไม่มี item type column อยู่แล้ว → เท่ากับ ar_pri_columns เดิม
+    ทำ alias ไว้เพื่อความสม่ำเสมอ + รองรับอนาคตถ้า AR มี item
+    """
+    return ar_pri_columns(row)
 
 
 def ar_stop_columns(row) -> str:

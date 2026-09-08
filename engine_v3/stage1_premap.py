@@ -40,6 +40,20 @@ def ap_prime(ap_df: pd.DataFrame) -> pd.DataFrame:
     return out.reset_index(drop=True)
 
 
+def ap_prime_noitem(ap_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prime (without item type) สำหรับ FLAT fallback
+    Pri-Columns2 → Active. filter ≠CUSTPICKUP
+    เฉพาะแถวที่ charge เข้าเงื่อนไข FLAT (Left4=FLAT)
+    """
+    df = ap_df[ap_df.apply(_not_custpickup, axis=1)].copy()
+    df = df[df["Charge Code"].apply(keys.is_flat_fallback)]
+    df["Pri-Columns2"] = df.apply(keys.ap_pri_columns_noitem, axis=1)
+    out = df[["Pri-Columns2"]].drop_duplicates().copy()
+    out["Prime Status NoItem"] = "Active"
+    return out.reset_index(drop=True)
+
+
 def ap_prime_child(ap_df: pd.DataFrame) -> pd.DataFrame:
     """Prime (Child): TYPE≠GENERIC AND ≠CUSTPICKUP AND ≠STOP"""
     mask = ap_df.apply(
@@ -133,8 +147,9 @@ def run(lc_df, ap_df, ar_df) -> dict:
     """
     return {
         # 1.1 AP
-        "ap_prime":       ap_prime(ap_df),
-        "ap_prime_child": ap_prime_child(ap_df),
+        "ap_prime":        ap_prime(ap_df),
+        "ap_prime_noitem": ap_prime_noitem(ap_df),   # FLAT fallback
+        "ap_prime_child":  ap_prime_child(ap_df),
         "ap_mandatory":   ap_mandatory(ap_df),
         "ap_carrier":     ap_carrier(ap_df),
         "ap_truck":       ap_truck(ap_df),
