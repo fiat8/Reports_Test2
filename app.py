@@ -11,10 +11,10 @@ from io import BytesIO
 from engine_v3 import io as v3io
 from engine_v3 import pipeline
 
-st.set_page_config(page_title="BRF Billing Reconcile V3", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Billing Reconcile", page_icon="📊", layout="wide")
 
-st.title("📊 BRF Billing Reconcile")
-st.caption("AR/AP Mapping — BRF Logistics Co., Ltd. (Framework V3 + FLAT Fallback)")
+st.title("📊 Billing Reconcile")
+st.caption("AR/AP Mapping — BRF Logistics Co., Ltd.")
 
 # ── Sidebar: upload 3 files ──────────────────────────────────────────────────
 st.sidebar.header("📂 อัปโหลดข้อมูล 3 ไฟล์")
