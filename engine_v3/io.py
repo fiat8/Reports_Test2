@@ -49,13 +49,17 @@ def _ext_of(file) -> str:
 def read_load_confirm(file) -> pd.DataFrame:
     """
     Load Confirm Data (main) — promote headers + parse dates
+    เก็บชื่อคอลัมน์ต้นฉบับไว้ใน df.attrs['original_cols'] สำหรับ styling ตอน export
     """
     df = read_any(file)
+    # เก็บคอลัมน์ต้นฉบับ (ก่อนเพิ่ม key/status)
+    original_cols = list(df.columns)
     # parse date columns ที่มี (dayfirst)
     for col in ["PickupConfirmed Date", "Load Created Date",
                 "Completed Date", "POD Date", "Shipment Early Picked Date"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+    df.attrs["original_cols"] = original_cols
     return df
 
 
