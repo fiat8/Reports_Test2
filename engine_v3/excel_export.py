@@ -17,7 +17,13 @@ COLOR_AP = "2563EB"   # ฟ้า
 COLOR_AR = "059669"   # เขียว
 WHITE    = "FFFFFF"
 
-HIDDEN = {"_is_flat", "_pickup_str", "_ap_row", "_ar_row"}
+HIDDEN = {
+    "_is_flat", "_pickup_str", "_ap_row", "_ar_row",
+    # key ภายใน — ซ่อนตอน export
+    "Pri-AP", "Mandate Key", "Sup-Carrier", "Sup-Truck", "AP Stop",
+    "Final key", "Pri-AP2", "Final key2",
+    "AR-Pri", "AR Stop", "AR-Final key", "AR-Pri2", "AR-Final key2",
+}
 
 AR_HINTS = ["AR-Pri", "AR Stop", "AR-Final", "AR Prime", "AR Rate"]
 AP_HINTS = ["Pri-AP", "Mandate Key", "Sup-Carrier", "Sup-Truck", "AP Stop",
