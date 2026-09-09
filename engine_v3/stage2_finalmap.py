@@ -147,8 +147,10 @@ def _finalmap_full(main, master, main_key, master_key, suffix,
     m[exp_col] = pd.to_datetime(m[exp_col], errors="coerce")
 
     merged = grp.merge(m, left_on=main_key, right_on=master_key, how="left")
-    pk = pd.to_datetime(merged[pickup_col], errors="coerce")
-    active = (pk >= merged[eff_col]) & (pk <= merged[exp_col])
+    pk = pd.to_datetime(merged[pickup_col], errors="coerce").dt.normalize()
+    eff = pd.to_datetime(merged[eff_col], errors="coerce").dt.normalize()
+    exp = pd.to_datetime(merged[exp_col], errors="coerce").dt.normalize()
+    active = (pk >= eff) & (pk <= exp)
     result = merged[active].copy()
 
     result["_pkstr"] = pd.to_datetime(result[pickup_col], errors="coerce").dt.strftime("%d/%m/%Y")
@@ -208,8 +210,10 @@ def _daterange_finalmap(
     m[exp_col] = pd.to_datetime(m[exp_col], errors="coerce")
 
     merged = grp.merge(m, left_on=main_key, right_on=master_key, how="left")
-    pk = pd.to_datetime(merged[pickup_col], errors="coerce")
-    active = (pk >= merged[eff_col]) & (pk <= merged[exp_col])
+    pk = pd.to_datetime(merged[pickup_col], errors="coerce").dt.normalize()
+    eff = pd.to_datetime(merged[eff_col], errors="coerce").dt.normalize()
+    exp = pd.to_datetime(merged[exp_col], errors="coerce").dt.normalize()
+    active = (pk >= eff) & (pk <= exp)
     result = merged[active].copy()
 
     # Final key = key + PickupDate
@@ -278,8 +282,10 @@ def ar_final_normal(main, ar_master_normal) -> pd.DataFrame:
     m["EXPIRATIONDATE"] = pd.to_datetime(m["EXPIRATIONDATE"], errors="coerce")
 
     merged = grp.merge(m, left_on="AR-Pri", right_on="Pri-Columns", how="left")
-    pk = pd.to_datetime(merged["PickupConfirmed Date"], errors="coerce")
-    active = (pk >= merged["EFFECTIVEDATE"]) & (pk <= merged["EXPIRATIONDATE"])
+    pk = pd.to_datetime(merged["PickupConfirmed Date"], errors="coerce").dt.normalize()
+    eff = pd.to_datetime(merged["EFFECTIVEDATE"], errors="coerce").dt.normalize()
+    exp = pd.to_datetime(merged["EXPIRATIONDATE"], errors="coerce").dt.normalize()
+    active = (pk >= eff) & (pk <= exp)
     result = merged[active].copy()
     result["_pkstr"] = pk[active].dt.strftime("%d/%m/%Y")
     result["AR-Final key"] = result["AR-Pri"].astype(str) + result["_pkstr"].fillna("")
@@ -332,8 +338,10 @@ def _daterange_finalmap_key2(main, master, main_key, master_key,
     m[eff_col] = pd.to_datetime(m[eff_col], errors="coerce")
     m[exp_col] = pd.to_datetime(m[exp_col], errors="coerce")
     merged = grp.merge(m, left_on=main_key, right_on=master_key, how="left")
-    pk = pd.to_datetime(merged[pickup_col], errors="coerce")
-    active = (pk >= merged[eff_col]) & (pk <= merged[exp_col])
+    pk = pd.to_datetime(merged[pickup_col], errors="coerce").dt.normalize()
+    eff = pd.to_datetime(merged[eff_col], errors="coerce").dt.normalize()
+    exp = pd.to_datetime(merged[exp_col], errors="coerce").dt.normalize()
+    active = (pk >= eff) & (pk <= exp)
     result = merged[active].copy()
     result["_pkstr"] = pd.to_datetime(result[pickup_col], errors="coerce").dt.strftime("%d/%m/%Y")
     result["Final key2"] = result[main_key].astype(str) + result["_pkstr"].fillna("")
