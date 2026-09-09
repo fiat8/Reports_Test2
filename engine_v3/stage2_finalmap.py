@@ -292,11 +292,10 @@ def ar_final_normal(main, ar_master_normal) -> pd.DataFrame:
 
     if "_ar_row" in result.columns:
         result = result.sort_values(["AR-Pri", "_pkstr", "_ar_row"])
-        counts = result.groupby("AR-Final key").size()
         first = result.drop_duplicates(subset=["AR-Final key"], keep="first").copy()
-        def _mk(row):
-            return f"AR-{int(row['_ar_row'])}"
-        first["AR Rate From"] = first.apply(_mk, axis=1)
+        if first.empty:
+            return pd.DataFrame(columns=["AR-Final key", "AR Rate Charge", "AR Rate From"])
+        first["AR Rate From"] = first["_ar_row"].apply(lambda x: f"AR-{int(x)}")
         out = first[["AR-Final key", "RATE", "AR Rate From"]].reset_index(drop=True)
         return out.rename(columns={"RATE": "AR Rate Charge"})
 
