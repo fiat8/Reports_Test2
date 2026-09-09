@@ -24,6 +24,12 @@ AR_KEY_COLUMNS = [
 EXCLUDE_RATE_TARIFF = "CUSTPICKUP"       # ตัดออกทุก AP query
 STOP_CODES          = {"STEP", "STOP", "STOP_3PL"}
 STOP_ONLY_CODES     = {"STOP", "STOP_3PL"}
+
+# ── Charge Type classification (จาก M-Code) ──────────────────────────────────
+CASE_CODES = {"CASEP", "CASE", "PS-CASE", "COD_CHARGE", "WEIGHT", "PALLET"}
+FLAT_CODES = {"CO", "FLAT", "FLATM", "DFTFREE", "FLATB", "SDFLAT",
+              "FLATP", "AR_OVR", "FLATP_OVR", "AR_FLATP"}
+COMPOUND_CODES = {"DRAFTFLAT"}
 GENERIC_MARKER      = "GENERIC"          # Rate Tariff ID มีคำนี้ = Generic
 
 # SDFLAT special handling

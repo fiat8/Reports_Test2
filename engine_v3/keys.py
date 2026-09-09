@@ -10,6 +10,7 @@ import pandas as pd
 from engine_v3.config import (
     LC, DRAFTFLAT_CODE, DRAFTFLAT_FROM, DRAFTFLAT_TO,
     CO_CODE, AR_CO_MARKER, DATE_EN_AU, FLAT_FALLBACK_PREFIX,
+    CASE_CODES, FLAT_CODES, COMPOUND_CODES,
 )
 
 
@@ -29,6 +30,24 @@ def is_flat_fallback(charge_code) -> bool:
     SDFLAT ไม่เข้า (ขึ้นต้น SDFL)
     """
     return s(charge_code)[:4].upper() == FLAT_FALLBACK_PREFIX
+
+
+def charge_type(charge_code) -> str:
+    """
+    Charge Type จาก M-Code:
+      CASE     = {CASEP, CASE, PS-CASE, COD_CHARGE, WEIGHT, PALLET}
+      FLAT     = {CO, FLAT, FLATM, DFTFREE, FLATB, SDFLAT, FLATP, AR_OVR, FLATP_OVR, AR_FLATP}
+      COMPOUND = {DRAFTFLAT}
+      อื่นๆ    = ""
+    """
+    c = s(charge_code)
+    if c in CASE_CODES:
+        return "CASE"
+    if c in FLAT_CODES:
+        return "FLAT"
+    if c in COMPOUND_CODES:
+        return "COMPOUND"
+    return ""
 
 
 # =============================================================================
@@ -168,6 +187,7 @@ def add_load_confirm_keys(df: pd.DataFrame) -> pd.DataFrame:
 
     # ── FLAT Fallback keys (without item type) ────────────────────────────
     df["_is_flat"]      = df.apply(lambda r: is_flat_fallback(r.get(LC["charge_code"])), axis=1)
+    df["Charge Type"]   = df.apply(lambda r: charge_type(r.get(LC["charge_code"])), axis=1)
     df["Pri-AP2"]       = df.apply(build_pri_ap_noitem, axis=1)
     df["AR-Pri2"]       = df.apply(build_ar_pri_noitem, axis=1)
     df["Final key2"]    = df["Pri-AP2"] + df["_pickup_str"]

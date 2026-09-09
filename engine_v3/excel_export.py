@@ -17,12 +17,14 @@ COLOR_AP = "2563EB"   # ฟ้า
 COLOR_AR = "059669"   # เขียว
 WHITE    = "FFFFFF"
 
-HIDDEN = {
-    "_is_flat", "_pickup_str", "_ap_row", "_ar_row",
-    # key ภายใน — ซ่อนตอน export
+HIDDEN = {"_is_flat", "_pickup_str", "_ap_row", "_ar_row"}
+
+# key ภายใน — ยังอยู่ในไฟล์ แต่ set column hidden (Unhide แล้วเจอ)
+HIDE_IN_EXCEL = {
     "Pri-AP", "Mandate Key", "Sup-Carrier", "Sup-Truck", "AP Stop",
     "Final key", "Pri-AP2", "Final key2",
     "AR-Pri", "AR Stop", "AR-Final key", "AR-Pri2", "AR-Final key2",
+    "AP Rate Type",   # ซ้ำกับ AP Rate Source (Source ละเอียดกว่า)
 }
 
 AR_HINTS = ["AR-Pri", "AR Stop", "AR-Final", "AR Prime", "AR Rate"]
@@ -34,15 +36,16 @@ AP_ORDER = [
     "Pri-AP", "Mandate Key", "Sup-Carrier", "Sup-Truck", "AP Stop",
     "Final key", "Pri-AP2", "Final key2",
     "Prime Status", "Child Status", "Mandatory Status", "Carrier Status", "Truck Status",
-    "AP Stop Charge",
     "AP Effective Date", "AP Expiration Date",   # ← date ของตัวที่เลือก
-    "AP Rate Charge", "AP Rate Source", "AP Rate Type",
+    "AP Rate Charge", "AP Stop Charge",           # ← Stop Charge ต่อจาก Rate Charge
+    "AP Rate Source", "AP Rate Type",
     "AP Rate From",   # ← ท้ายสุดโซน AP
 ]
 # ลำดับภายในโซน AR
 AR_ORDER = [
     "AR-Pri", "AR Stop", "AR-Final key", "AR-Pri2", "AR-Final key2",
-    "AR Prime Status", "AR Stop Charge", "AR Rate Charge",
+    "AR Prime Status",
+    "AR Rate Charge", "AR Stop Charge",           # ← Stop Charge ต่อจาก Rate Charge
     "AR Rate From",   # ← ท้ายสุดโซน AR
 ]
 
@@ -74,8 +77,10 @@ def _arrange(df, orig_cols):
     for c in cols:
         z = _zone(str(c), orig_set)
         (lc if z == "LC" else ap if z == "AP" else ar).append(c)
-    # LC เรียงตามต้นฉบับก่อน
-    lc_ordered = [c for c in orig_cols if c in lc] + [c for c in lc if c not in orig_set]
+    # LC เรียงตามต้นฉบับก่อน แล้ว Charge Type ต่อท้าย (ก่อนโซน AP)
+    lc_orig = [c for c in orig_cols if c in lc]
+    lc_extra = [c for c in lc if c not in orig_set and c != "Charge Type"]
+    lc_ordered = lc_orig + lc_extra + (["Charge Type"] if "Charge Type" in lc else [])
     # AP / AR เรียงตามลำดับที่กำหนด (Rate From ท้ายสุด)
     ap_ordered = _order_zone(ap, AP_ORDER)
     ar_ordered = _order_zone(ar, AR_ORDER)
@@ -118,6 +123,11 @@ def to_styled_excel(df, original_cols=None, sheet_name="Result"):
             except Exception:
                 pass
             ws.column_dimensions[letter].width = min(max_len + 2, 50)
+
+        # ── ซ่อน column key ภายใน (hidden=True — Unhide แล้วเจอ) ──
+        for idx, col in enumerate(arranged.columns, start=1):
+            if str(col) in HIDE_IN_EXCEL:
+                ws.column_dimensions[get_column_letter(idx)].hidden = True
 
         ws.freeze_panes = "A2"
 
