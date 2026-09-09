@@ -128,6 +128,55 @@ def build_ar_master_normal(ar_df: pd.DataFrame) -> pd.DataFrame:
 # =============================================================================
 # Date-range join (หัวใจ M-Code APFinal/ARFinal)
 # =============================================================================
+def _finalmap_full(main, master, main_key, master_key, suffix,
+                   eff_col="Effective Date", exp_col="Expiration Date",
+                   rate_col="Rate", row_col="_ap_row", row_prefix="AP",
+                   final_key_name="Final key", pickup_col="PickupConfirmed Date"):
+    """
+    date-range map → return ครบ: Final key + Rate + Eff + Exp + RateFrom
+    (แต่ละ column มี suffix บอก type เช่น _CHILD, _GEN, _CHILD_NI, _GEN_NI)
+    เลือกแถวแรก (row_col น้อยสุด)
+    """
+    grp = main[[main_key, pickup_col]].dropna(subset=[main_key]).drop_duplicates()
+    cols = [master_key, eff_col, exp_col, rate_col]
+    has_row = row_col in master.columns
+    if has_row:
+        cols.append(row_col)
+    m = master[cols].copy()
+    m[eff_col] = pd.to_datetime(m[eff_col], errors="coerce")
+    m[exp_col] = pd.to_datetime(m[exp_col], errors="coerce")
+
+    merged = grp.merge(m, left_on=main_key, right_on=master_key, how="left")
+    pk = pd.to_datetime(merged[pickup_col], errors="coerce")
+    active = (pk >= merged[eff_col]) & (pk <= merged[exp_col])
+    result = merged[active].copy()
+
+    result["_pkstr"] = pd.to_datetime(result[pickup_col], errors="coerce").dt.strftime("%d/%m/%Y")
+    result[final_key_name] = result[main_key].astype(str) + result["_pkstr"].fillna("")
+
+    # เอาแถวแรก
+    sort_cols = [main_key, "_pkstr"] + ([row_col] if has_row else [])
+    result = result.sort_values(sort_cols)
+    first = result.drop_duplicates(subset=[final_key_name], keep="first").copy()
+
+    if first.empty:
+        return pd.DataFrame(columns=[final_key_name, f"Rate{suffix}",
+                                     f"Eff{suffix}", f"Exp{suffix}", f"From{suffix}"])
+
+    if has_row:
+        first[f"From{suffix}"] = first[row_col].apply(lambda r: f"{row_prefix}-{int(r)}")
+    else:
+        first[f"From{suffix}"] = ""
+
+    out = first[[final_key_name, rate_col, eff_col, exp_col, f"From{suffix}"]].copy()
+    out = out.rename(columns={
+        rate_col: f"Rate{suffix}",
+        eff_col:  f"Eff{suffix}",
+        exp_col:  f"Exp{suffix}",
+    })
+    return out.reset_index(drop=True)
+
+
 def _daterange_finalmap(
     main: pd.DataFrame,
     master: pd.DataFrame,
@@ -301,21 +350,22 @@ def run(main: pd.DataFrame, ap_df: pd.DataFrame, ar_df: pd.DataFrame) -> dict:
     ap_gen_ni = build_ap_master_generic_noitem(ap_df)
     ap_chd_ni = build_ap_master_child_noitem(ap_df)
 
-    # fallback final maps (ใช้ helper key2)
-    fb_gen = _daterange_finalmap_key2(
-        main, ap_gen_ni, "Pri-AP2", "Pri-Columns2",
-        "Effective Date", "Expiration Date", "Rate",
-    ).rename(columns={"Rate": "AP Rate Charge (Generic) NoItem"})
-    fb_chd = _daterange_finalmap_key2(
-        main, ap_chd_ni, "Pri-AP2", "Pri-Columns2",
-        "Effective Date", "Expiration Date", "Rate",
-    ).rename(columns={"Rate": "AP Rate Charge (Child) NoItem"})
+    # ── AP final maps (4 types) — return ครบ rate+eff+exp+from + suffix ──
+    # WITH item type → join บน Final key (Pri-AP)
+    ap_child_full = _finalmap_full(main, ap_chd, "Pri-AP", "Pri-Columns", "_CHILD",
+                                   final_key_name="Final key")
+    ap_gen_full   = _finalmap_full(main, ap_gen, "Pri-AP", "Pri-Columns", "_GEN",
+                                   final_key_name="Final key")
+    # WITHOUT item type → join บน Final key2 (Pri-AP2)
+    ap_child_ni_full = _finalmap_full(main, ap_chd_ni, "Pri-AP2", "Pri-Columns2", "_CHILD_NI",
+                                      final_key_name="Final key2")
+    ap_gen_ni_full   = _finalmap_full(main, ap_gen_ni, "Pri-AP2", "Pri-Columns2", "_GEN_NI",
+                                      final_key_name="Final key2")
 
     return {
-        "ap_final_generic": ap_final_generic(main, ap_gen),
-        "ap_final_child":   ap_final_child(main, ap_chd),
+        "ap_child_full":    ap_child_full,     # Final key + Rate_CHILD + Eff_CHILD + Exp_CHILD + From_CHILD
+        "ap_gen_full":      ap_gen_full,
+        "ap_child_ni_full": ap_child_ni_full,  # Final key2 + ...
+        "ap_gen_ni_full":   ap_gen_ni_full,
         "ar_final_normal":  ar_final_normal(main, ar_nrm),
-        # FLAT fallback
-        "ap_final_generic_noitem": fb_gen,
-        "ap_final_child_noitem":   fb_chd,
     }

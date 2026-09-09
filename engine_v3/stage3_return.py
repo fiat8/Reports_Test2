@@ -45,57 +45,62 @@ def run(stage1: dict, stage2: dict) -> pd.DataFrame:
     main = _merge(main, stage1["ar_prime"], "AR-Pri",  "Pri-Columns",  ["AR Prime Status"])
     main = _merge(main, stage1["ar_stop"],  "AR Stop", "Stop-Columns", ["AR Stop Charge"])
 
-    # ── Stage 2: final map rate (join บน Final key) — WITH item type ───────
-    main = _merge(main, stage2["ap_final_generic"], "Final key",    "Final key",    ["AP Rate Charge (Generic)", "AP Rate From (Generic)"])
-    main = _merge(main, stage2["ap_final_child"],   "Final key",    "Final key",    ["AP Rate Charge (Child)", "AP Rate From (Child)"])
-    main = _merge(main, stage2["ar_final_normal"],  "AR-Final key", "AR-Final key", ["AR Rate Charge", "AR Rate From"])
+    # ── Stage 2: AP final map (4 types) — merge ทั้งหมด (มี date + from) ────
+    # WITH item → join Final key ; WITHOUT item → join Final key2
+    main = _merge(main, stage2["ap_child_full"], "Final key",  "Final key",
+                  ["Rate_CHILD", "Eff_CHILD", "Exp_CHILD", "From_CHILD"])
+    main = _merge(main, stage2["ap_gen_full"],   "Final key",  "Final key",
+                  ["Rate_GEN", "Eff_GEN", "Exp_GEN", "From_GEN"])
+    main = _merge(main, stage2["ap_child_ni_full"], "Final key2", "Final key2",
+                  ["Rate_CHILD_NI", "Eff_CHILD_NI", "Exp_CHILD_NI", "From_CHILD_NI"])
+    main = _merge(main, stage2["ap_gen_ni_full"],   "Final key2", "Final key2",
+                  ["Rate_GEN_NI", "Eff_GEN_NI", "Exp_GEN_NI", "From_GEN_NI"])
+    main = _merge(main, stage2["ar_final_normal"],  "AR-Final key", "AR-Final key",
+                  ["AR Rate Charge", "AR Rate From"])
 
-    # ── Stage 2: FLAT fallback rate (join บน Final key2) — WITHOUT item ────
-    if "ap_final_generic_noitem" in stage2:
-        main = _merge(main, stage2["ap_final_generic_noitem"], "Final key2", "Final key2",
-                      ["AP Rate Charge (Generic) NoItem"])
-    if "ap_final_child_noitem" in stage2:
-        main = _merge(main, stage2["ap_final_child_noitem"], "Final key2", "Final key2",
-                      ["AP Rate Charge (Child) NoItem"])
+    # ── เลือก 1 ชุดตาม Priority: Child(with) > Child(without) > Generic(with) > Generic(without)
+    # return 3 คอลัมน์: AP Effective Date, AP Expiration Date, AP Rate Charge + AP Rate From
+    # NoItem ใช้เฉพาะ FLAT (fallback)
+    def _pick_ap(row):
+        is_flat = row.get("_is_flat")
+        # ลำดับ (suffix, ต้องเป็น flat ไหม, ชื่อ source)
+        seq = [
+            ("_CHILD",    False, "Child"),        # Child with
+            ("_CHILD_NI", True,  "Child-NI"),     # Child without (flat only)
+            ("_GEN",      False, "Generic"),      # Generic with
+            ("_GEN_NI",   True,  "Generic-NI"),   # Generic without (flat only)
+        ]
+        for suf, need_flat, src in seq:
+            if need_flat and not is_flat:
+                continue
+            rate = row.get(f"Rate{suf}")
+            if pd.notna(rate):
+                return pd.Series({
+                    "AP Effective Date":  row.get(f"Eff{suf}"),
+                    "AP Expiration Date": row.get(f"Exp{suf}"),
+                    "AP Rate Charge":     rate,
+                    "AP Rate Source":     src,
+                    "AP Rate From":       row.get(f"From{suf}"),
+                })
+        return pd.Series({
+            "AP Effective Date": None, "AP Expiration Date": None,
+            "AP Rate Charge": None, "AP Rate Source": "", "AP Rate From": None,
+        })
 
-    # ── AP Rate Charge + AP Rate From: Child > Generic, with > without ────
-    def _pick_ap_rate(row):
-        if pd.notna(row.get("AP Rate Charge (Child)")):
-            return row.get("AP Rate Charge (Child)")
-        if pd.notna(row.get("AP Rate Charge (Generic)")):
-            return row.get("AP Rate Charge (Generic)")
-        if row.get("_is_flat"):
-            if pd.notna(row.get("AP Rate Charge (Child) NoItem")):
-                return row.get("AP Rate Charge (Child) NoItem")
-            if pd.notna(row.get("AP Rate Charge (Generic) NoItem")):
-                return row.get("AP Rate Charge (Generic) NoItem")
-        return None
-    main["AP Rate Charge"] = main.apply(_pick_ap_rate, axis=1)
-
-    def _pick_ap_from(row):
-        # เลือก Rate From ให้ตรงกับ rate ที่เลือก
-        if pd.notna(row.get("AP Rate Charge (Child)")):
-            return row.get("AP Rate From (Child)")
-        if pd.notna(row.get("AP Rate Charge (Generic)")):
-            return row.get("AP Rate From (Generic)")
-        return None   # fallback noitem ยังไม่มี row indicator (เฟสถัดไป)
-    main["AP Rate From"] = main.apply(_pick_ap_from, axis=1)
+    picked = main.apply(_pick_ap, axis=1)
+    main["AP Effective Date"]  = picked["AP Effective Date"]
+    main["AP Expiration Date"] = picked["AP Expiration Date"]
+    main["AP Rate Charge"]     = picked["AP Rate Charge"]
+    main["AP Rate Source"]     = picked["AP Rate Source"]
+    main["AP Rate From"]       = picked["AP Rate From"]
 
     # ── Prime Status: mark with / without (เฉพาะ FLAT) ────────────────────
-    # M-Code: Prime Status เดิม = Active/None
-    #   ถ้า match with item type       → "Active with"
-    #   ถ้า fallback without item type  → "Active without"
     def _prime_status(row):
-        with_active = row.get("Prime Status") == "Active"
-        if with_active:
-            # ถ้าเป็น FLAT ที่ผ่าน fallback path ให้ระบุ with
-            if row.get("_is_flat"):
-                return "Active with"
-            return "Active"
-        # with ไม่เจอ — ลอง fallback (เฉพาะ FLAT)
+        if row.get("Prime Status") == "Active":
+            return "Active with" if row.get("_is_flat") else "Active"
         if row.get("_is_flat") and row.get("Prime Status NoItem") == "Active":
             return "Active without"
-        return row.get("Prime Status")  # None / เดิม
+        return row.get("Prime Status")
     main["Prime Status"] = main.apply(_prime_status, axis=1)
 
     # ── AP Rate Type ──────────────────────────────────────────────────────
@@ -108,12 +113,10 @@ def run(stage1: dict, stage2: dict) -> pd.DataFrame:
         return ""
     main["AP Rate Type"] = main.apply(_rate_type, axis=1)
 
-    # ── ลบ working columns ────────────────────────────────────────────────
-    # ── ลบ working columns ────────────────────────────────────────────────
-    drop_cols = [
-        "_pickup_str", "Prime Status NoItem",
-        "AP Rate From (Generic)", "AP Rate From (Child)",  # รวมเป็น AP Rate From แล้ว
-    ]
+    # ── ลบ working columns (intermediate rate/date/from ทั้ง 4 ชุด) ────────
+    drop_cols = ["_pickup_str", "Prime Status NoItem"]
+    for suf in ["_CHILD", "_GEN", "_CHILD_NI", "_GEN_NI"]:
+        drop_cols += [f"Rate{suf}", f"Eff{suf}", f"Exp{suf}", f"From{suf}"]
     main = main.drop(columns=[c for c in drop_cols if c in main.columns], errors="ignore")
 
     return main

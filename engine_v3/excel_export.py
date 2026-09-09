@@ -22,17 +22,15 @@ HIDDEN = {"_is_flat", "_pickup_str", "_ap_row", "_ar_row"}
 AR_HINTS = ["AR-Pri", "AR Stop", "AR-Final", "AR Prime", "AR Rate"]
 AP_HINTS = ["Pri-AP", "Mandate Key", "Sup-Carrier", "Sup-Truck", "AP Stop",
             "Final key", "Prime Status", "Child Status", "Mandatory Status",
-            "Carrier Status", "Truck Status", "AP Rate"]
-
+            "Carrier Status", "Truck Status", "AP Rate", "AP Effective", "AP Expiration"]
 # ลำดับที่ต้องการภายในโซน AP (ตัวที่ไม่อยู่ในนี้ต่อท้ายตามเดิม)
 AP_ORDER = [
     "Pri-AP", "Mandate Key", "Sup-Carrier", "Sup-Truck", "AP Stop",
     "Final key", "Pri-AP2", "Final key2",
     "Prime Status", "Child Status", "Mandatory Status", "Carrier Status", "Truck Status",
     "AP Stop Charge",
-    "AP Rate Charge (Generic)", "AP Rate Charge (Child)",
-    "AP Rate Charge (Generic) NoItem", "AP Rate Charge (Child) NoItem",
-    "AP Rate Charge", "AP Rate Type",
+    "AP Effective Date", "AP Expiration Date",   # ← date ของตัวที่เลือก
+    "AP Rate Charge", "AP Rate Source", "AP Rate Type",
     "AP Rate From",   # ← ท้ายสุดโซน AP
 ]
 # ลำดับภายในโซน AR
