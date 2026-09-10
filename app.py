@@ -16,7 +16,7 @@ from engine_v3.excel_export import to_styled_excel
 st.set_page_config(page_title="Billing Reconcile", page_icon="📊", layout="wide")
 
 st.title("📊 Billing Reconcile")
-st.caption("AR/AP Mapping — BRF Logistics Co., Ltd.")
+st.caption("AR/AP Mapping")
 
 # ── Sidebar upload ───────────────────────────────────────────────────────────
 st.sidebar.header("📂 อัปโหลดข้อมูล 3 ไฟล์")
