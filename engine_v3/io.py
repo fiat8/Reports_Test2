@@ -10,6 +10,36 @@ from engine_v3.config import AP_RAW_COLUMNS, AP_DROP_COLUMNS
 
 
 # ── Core reader ──────────────────────────────────────────────────────────────
+def _parse_date(series):
+    """
+    แปลงวันที่อย่างฉลาด — รองรับทั้ง:
+      1. datetime อยู่แล้ว → ใช้เลย
+      2. Excel serial number (.xlsb คืนแบบนี้ เช่น 46200) → แปลงจาก 1899-12-30
+      3. string DD/MM/YYYY → parse dayfirst
+
+    หมายเหตุ .xlsb: pyxlsb คืน date เป็น serial number ดิบ (ไม่แปลงให้)
+    """
+    s = pd.Series(series)
+
+    # datetime อยู่แล้ว
+    if pd.api.types.is_datetime64_any_dtype(s):
+        return s
+
+    num = pd.to_numeric(s, errors="coerce")
+    numeric_ratio = num.notna().mean() if len(num) else 0
+
+    if numeric_ratio > 0.5:
+        # Excel serial — ช่วงวันที่สมเหตุสมผล: 36526 (2000) ถึง 54789 (2050)
+        # ป้องกันเลขที่ไม่ใช่วันที่ (เช่น rate/qty ปน)
+        valid_serial = (num >= 20000) & (num <= 80000)  # ~1954 ถึง ~2119
+        result = pd.to_datetime(num.where(valid_serial), origin="1899-12-30",
+                                unit="D", errors="coerce")
+        return result
+
+    # string → dayfirst
+    return pd.to_datetime(s, dayfirst=True, errors="coerce")
+
+
 def read_any(file) -> pd.DataFrame:
     """
     อ่านไฟล์จาก path หรือ Streamlit UploadedFile
@@ -58,7 +88,7 @@ def read_load_confirm(file) -> pd.DataFrame:
     for col in ["PickupConfirmed Date", "Load Created Date",
                 "Completed Date", "POD Date", "Shipment Early Picked Date"]:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+            df[col] = _parse_date(df[col])
     df.attrs["original_cols"] = original_cols
     return df
 
@@ -77,7 +107,7 @@ def read_ap_data(file) -> pd.DataFrame:
     df = df.drop(columns=[c for c in AP_DROP_COLUMNS if c in df.columns], errors="ignore")
     for col in ["Effective Date", "Expiration Date"]:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+            df[col] = _parse_date(df[col])
     # เลขแถวต้นฉบับ (สำหรับ Row Indicator) — เริ่มนับ 1
     df = df.reset_index(drop=True)
     df["_ap_row"] = range(1, len(df) + 1)
@@ -93,7 +123,7 @@ def read_ar_data(file) -> pd.DataFrame:
     df = read_any(file)
     for col in ["EFFECTIVEDATE", "EXPIRATIONDATE"]:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+            df[col] = _parse_date(df[col])
     df = df.reset_index(drop=True)
     df["_ar_row"] = range(1, len(df) + 1)
     return df
