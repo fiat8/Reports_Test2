@@ -23,9 +23,11 @@ def _merge(main, ref, left_key, right_key, keep_cols):
                       on=left_key, how="left")
 
 
-def run(stage1: dict, stage2: dict) -> pd.DataFrame:
+def run(stage1: dict, stage2: dict, draftflat_rate=None) -> pd.DataFrame:
     """
     รวมทุกอย่างกลับเข้า main
+    draftflat_rate: ค่า constant สำหรับ DRAFTFLAT (AR-Pri = "DRAFTDRAFTFLAT")
+                    ถ้ามีค่า → เติม AR Rate ให้ทุกแถว DRAFTFLAT (ไม่ดู date)
     """
     main = stage1["main"].copy()
 
@@ -57,6 +59,13 @@ def run(stage1: dict, stage2: dict) -> pd.DataFrame:
                   ["Rate_GEN_NI", "Eff_GEN_NI", "Exp_GEN_NI", "From_GEN_NI"])
     main = _merge(main, stage2["ar_final_normal"],  "AR-Final key", "AR-Final key",
                   ["AR Rate Charge", "AR Rate From"])
+
+    # ── DRAFTFLAT: เติม AR Rate เป็นค่า constant (ไม่ดู date) ──────────────
+    # AR-Pri = "DRAFTDRAFTFLAT" → AR Rate = ค่าที่กรอกในเว็บ
+    if draftflat_rate is not None:
+        mask_draft = main["AR-Pri"] == "DRAFTDRAFTFLAT"
+        main.loc[mask_draft, "AR Rate Charge"] = draftflat_rate
+        main.loc[mask_draft, "AR Rate From"] = "DRAFTFLAT (constant)"
 
     # ── เลือก 1 ชุดตาม Priority: Child(with) > Child(without) > Generic(with) > Generic(without)
     # return 3 คอลัมน์: AP Effective Date, AP Expiration Date, AP Rate Charge + AP Rate From
