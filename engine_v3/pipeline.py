@@ -7,13 +7,14 @@ from engine_v3 import stage1_premap, stage2_finalmap, stage3_return
 
 
 def run(lc_df: pd.DataFrame, ap_df: pd.DataFrame, ar_df: pd.DataFrame,
-        progress=None) -> pd.DataFrame:
+        progress=None, draftflat_rate=None) -> pd.DataFrame:
     """
     Full V3 pipeline:
       Stage 1: pre-map (status + keys)
       Stage 2: final map (date-range)
       Stage 3: return เข้า main
     progress: optional callback(stage_no, message) สำหรับแสดง step ใน UI
+    draftflat_rate: ค่า constant สำหรับ DRAFTFLAT AR (ถ้ามี)
     Returns: final DataFrame
     """
     def _p(n, msg):
@@ -30,7 +31,7 @@ def run(lc_df: pd.DataFrame, ap_df: pd.DataFrame, ar_df: pd.DataFrame,
 
     # Stage 3
     _p(3, "Stage 3: Return ค่ากลับรายงานหลัก")
-    result = stage3_return.run(s1, s2)
+    result = stage3_return.run(s1, s2, draftflat_rate=draftflat_rate)
     # พา original Load Confirm columns ไปด้วย (สำหรับ styling ตอน export)
     result.attrs["original_cols"] = lc_df.attrs.get("original_cols", [])
     _p(4, "เสร็จสิ้น")
