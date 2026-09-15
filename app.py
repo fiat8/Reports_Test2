@@ -16,13 +16,21 @@ from engine_v3.excel_export import to_styled_excel
 st.set_page_config(page_title="Billing Reconcile", page_icon="📊", layout="wide")
 
 st.title("📊 Billing Reconcile")
-st.caption("Version Test")
+st.caption("AR/AP Mapping — BRF Logistics Co., Ltd.")
 
 # ── Sidebar upload ───────────────────────────────────────────────────────────
 st.sidebar.header("📂 อัปโหลดข้อมูล 3 ไฟล์")
 lc_file = st.sidebar.file_uploader("1. Load Confirm Data (หลัก) *", type=["xlsx","xls","xlsb","csv"], key="lc")
 ap_file = st.sidebar.file_uploader("2. AP Data *", type=["xlsx","xls","xlsb","csv"], key="ap")
 ar_file = st.sidebar.file_uploader("3. AR Data *", type=["xlsx","xls","xlsb","csv"], key="ar")
+
+st.sidebar.divider()
+st.sidebar.subheader("⚙️ Parameters")
+draftflat_rate = st.sidebar.number_input(
+    "DRAFTFLAT AR Rate (constant)",
+    min_value=0.0, value=0.0, step=0.01, format="%.2f",
+    help="ค่า rate สำหรับ DRAFTFLAT ฝั่ง AR (AR-Pri = DRAFTDRAFTFLAT). ใส่ 0 = ไม่เติม",
+)
 
 if not all([lc_file, ap_file, ar_file]):
     st.info("👈 อัปโหลดครบ 3 ไฟล์ทางซ้าย แล้วกด Run Mapping")
@@ -79,7 +87,8 @@ if st.button("▶ Run Mapping", type="primary", width="stretch"):
             ar_df = v3io.read_ar_data(ar_file)
             st.write(f"   Load Confirm: {len(lc_df):,} | AP: {len(ap_df):,} | AR: {len(ar_df):,}")
 
-            result = pipeline.run(lc_df, ap_df, ar_df, progress=_prog)
+            result = pipeline.run(lc_df, ap_df, ar_df, progress=_prog,
+                                  draftflat_rate=(draftflat_rate if draftflat_rate > 0 else None))
             kpi = pipeline.get_kpi(result)
 
             # ── เตรียม Excel ทันที แล้วเก็บเฉพาะ bytes (ไม่เก็บ df ดิบ = ประหยัด RAM) ──
