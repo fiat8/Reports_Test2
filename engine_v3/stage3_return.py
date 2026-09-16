@@ -60,12 +60,13 @@ def run(stage1: dict, stage2: dict, draftflat_rate=None) -> pd.DataFrame:
     main = _merge(main, stage2["ar_final_normal"],  "AR-Final key", "AR-Final key",
                   ["AR Rate Charge", "AR Rate From"])
 
-    # ── DRAFTFLAT: เติม AR Rate เป็นค่า constant (ไม่ดู date) ──────────────
-    # AR-Pri = "DRAFTDRAFTFLAT" → AR Rate = ค่าที่กรอกในเว็บ
+    # ── DRAFTFLAT: AR Rate = constant × Shpm Pieces (ไม่ดู date) ──────────
+    # AR-Pri = "DRAFTDRAFTFLAT" → AR Rate = ค่าที่กรอก × จำนวนชิ้น
     if draftflat_rate is not None:
         mask_draft = main["AR-Pri"] == "DRAFTDRAFTFLAT"
-        main.loc[mask_draft, "AR Rate Charge"] = draftflat_rate
-        main.loc[mask_draft, "AR Rate From"] = "DRAFTFLAT (constant)"
+        pieces = pd.to_numeric(main.get("Shpm Pieces"), errors="coerce").fillna(0)
+        main.loc[mask_draft, "AR Rate Charge"] = draftflat_rate * pieces[mask_draft]
+        main.loc[mask_draft, "AR Rate From"] = f"DRAFTFLAT ({draftflat_rate}×Pieces)"
 
     # ── เลือก 1 ชุดตาม Priority: Child(with) > Child(without) > Generic(with) > Generic(without)
     # return 3 คอลัมน์: AP Effective Date, AP Expiration Date, AP Rate Charge + AP Rate From
