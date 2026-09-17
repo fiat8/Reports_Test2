@@ -15,6 +15,7 @@ from openpyxl.utils import get_column_letter
 COLOR_LC = "374151"   # เทาเข้ม
 COLOR_AP = "2563EB"   # ฟ้า
 COLOR_AR = "059669"   # เขียว
+COLOR_FUEL = "D97706" # ส้ม (Fuel)
 WHITE    = "FFFFFF"
 
 HIDDEN = {"_is_flat", "_pickup_str", "_ap_row", "_ar_row"}
@@ -53,6 +54,9 @@ AR_ORDER = [
 def _zone(col: str, orig_set: set) -> str:
     if col in orig_set:
         return "LC"
+    # Fuel = โซนพิเศษ (หลัง AP ก่อน AR)
+    if col in ("Fuel Price", "Fuel Surcharge"):
+        return "FUEL"
     for h in AR_HINTS:
         if h in col:
             return "AR"
@@ -73,18 +77,23 @@ def _arrange(df, orig_cols):
     orig_cols = list(orig_cols) if orig_cols is not None else []
     orig_set = set(orig_cols)
     cols = [c for c in df.columns if c not in HIDDEN]
-    lc, ap, ar = [], [], []
+    lc, ap, fuel, ar = [], [], [], []
     for c in cols:
         z = _zone(str(c), orig_set)
-        (lc if z == "LC" else ap if z == "AP" else ar).append(c)
+        if z == "LC": lc.append(c)
+        elif z == "AP": ap.append(c)
+        elif z == "FUEL": fuel.append(c)
+        else: ar.append(c)
     # LC เรียงตามต้นฉบับก่อน แล้ว Charge Type ต่อท้าย (ก่อนโซน AP)
     lc_orig = [c for c in orig_cols if c in lc]
     lc_extra = [c for c in lc if c not in orig_set and c != "Charge Type"]
     lc_ordered = lc_orig + lc_extra + (["Charge Type"] if "Charge Type" in lc else [])
-    # AP / AR เรียงตามลำดับที่กำหนด (Rate From ท้ายสุด)
+    # AP / AR เรียงตามลำดับที่กำหนด
     ap_ordered = _order_zone(ap, AP_ORDER)
     ar_ordered = _order_zone(ar, AR_ORDER)
-    order = lc_ordered + ap_ordered + ar_ordered
+    fuel_ordered = [c for c in ["Fuel Price", "Fuel Surcharge"] if c in fuel]
+    # ลำดับ: LC → AP → FUEL → AR
+    order = lc_ordered + ap_ordered + fuel_ordered + ar_ordered
     order += [c for c in cols if c not in order]
     return df[order], orig_set
 
@@ -101,6 +110,7 @@ def to_styled_excel(df, original_cols=None, sheet_name="Result"):
             "LC": PatternFill(start_color=COLOR_LC, end_color=COLOR_LC, fill_type="solid"),
             "AP": PatternFill(start_color=COLOR_AP, end_color=COLOR_AP, fill_type="solid"),
             "AR": PatternFill(start_color=COLOR_AR, end_color=COLOR_AR, fill_type="solid"),
+            "FUEL": PatternFill(start_color=COLOR_FUEL, end_color=COLOR_FUEL, fill_type="solid"),
         }
         white_bold = Font(color=WHITE, bold=True)
         center = Alignment(horizontal="center", vertical="center")
