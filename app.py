@@ -32,6 +32,20 @@ draftflat_rate = st.sidebar.number_input(
     help="ค่า rate สำหรับ DRAFTFLAT ฝั่ง AR (AR-Pri = DRAFTDRAFTFLAT). ใส่ 0 = ไม่เติม",
 )
 
+st.sidebar.divider()
+st.sidebar.subheader("⛽ Fuel Price")
+st.sidebar.caption("กรอกราคาน้ำมันตามวันที่ (เพิ่มแถวได้) — Surcharge = (Price-27)×1.75%")
+fuel_df = st.sidebar.data_editor(
+    pd.DataFrame({"Date": ["", "", ""], "Price": [None, None, None]}),
+    num_rows="dynamic",
+    use_container_width=True,
+    key="fuel_editor",
+    column_config={
+        "Date": st.column_config.TextColumn("Date (DD/MM/YYYY)"),
+        "Price": st.column_config.NumberColumn("Price", format="%.2f"),
+    },
+)
+
 if not all([lc_file, ap_file, ar_file]):
     st.info("👈 อัปโหลดครบ 3 ไฟล์ทางซ้าย แล้วกด Run Mapping")
     st.stop()
@@ -87,8 +101,13 @@ if st.button("▶ Run Mapping", type="primary", width="stretch"):
             ar_df = v3io.read_ar_data(ar_file)
             st.write(f"   Load Confirm: {len(lc_df):,} | AP: {len(ap_df):,} | AR: {len(ar_df):,}")
 
+            # เตรียม fuel_df (กรองแถวว่าง)
+            fuel_input = fuel_df.dropna(subset=["Price"]) if fuel_df is not None else None
+            fuel_input = fuel_input[fuel_input["Date"].astype(str).str.strip() != ""] if fuel_input is not None and len(fuel_input) else None
+
             result = pipeline.run(lc_df, ap_df, ar_df, progress=_prog,
-                                  draftflat_rate=(draftflat_rate if draftflat_rate > 0 else None))
+                                  draftflat_rate=(draftflat_rate if draftflat_rate > 0 else None),
+                                  fuel_df=fuel_input)
             kpi = pipeline.get_kpi(result)
 
             # ── เตรียม Excel ทันที แล้วเก็บเฉพาะ bytes (ไม่เก็บ df ดิบ = ประหยัด RAM) ──
