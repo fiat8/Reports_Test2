@@ -28,10 +28,10 @@ HIDE_IN_EXCEL = {
     "AP Rate Type",   # ซ้ำกับ AP Rate Source (Source ละเอียดกว่า)
 }
 
-AR_HINTS = ["AR-Pri", "AR Stop", "AR-Final", "AR Prime", "AR Rate"]
+AR_HINTS = ["AR-Pri", "AR Stop", "AR-Final", "AR Prime", "AR Rate", "AR Total"]
 AP_HINTS = ["Pri-AP", "Mandate Key", "Sup-Carrier", "Sup-Truck", "AP Stop",
             "Final key", "Prime Status", "Child Status", "Mandatory Status",
-            "Carrier Status", "Truck Status", "AP Rate", "AP Effective", "AP Expiration"]
+            "Carrier Status", "Truck Status", "AP Rate", "AP Effective", "AP Expiration", "AP Total"]
 # ลำดับที่ต้องการภายในโซน AP (ตัวที่ไม่อยู่ในนี้ต่อท้ายตามเดิม)
 AP_ORDER = [
     "Pri-AP", "Mandate Key", "Sup-Carrier", "Sup-Truck", "AP Stop",
@@ -40,14 +40,16 @@ AP_ORDER = [
     "AP Effective Date", "AP Expiration Date",   # ← date ของตัวที่เลือก
     "AP Rate Charge", "AP Stop Charge",           # ← Stop Charge ต่อจาก Rate Charge
     "AP Rate Source", "AP Rate Type",
-    "AP Rate From",   # ← ท้ายสุดโซน AP
+    "AP Rate From",
+    "AP Total",   # ← ท้ายสุดโซน AP
 ]
 # ลำดับภายในโซน AR
 AR_ORDER = [
     "AR-Pri", "AR Stop", "AR-Final key", "AR-Pri2", "AR-Final key2",
     "AR Prime Status",
-    "AR Rate Charge", "AR Stop Charge",           # ← Stop Charge ต่อจาก Rate Charge
-    "AR Rate From",   # ← ท้ายสุดโซน AR
+    "AR Rate Charge", "AR Stop Charge",
+    "AR Rate From",
+    "AR Total",   # ← ท้ายสุดโซน AR
 ]
 
 
