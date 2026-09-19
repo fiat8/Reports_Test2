@@ -51,7 +51,11 @@ def _calc_side(df: pd.DataFrame, rate_col: str, total_col: str,
     total[case_normal] = (pieces * rate)[case_normal]
 
     # ── FLAT + COMPOUND (rate return) → MAX ของ Rate ดิบ group by Load ID ──
-    is_flat_compound = ctype.isin(["FLAT", "COMPOUND"])
+    # ยกเว้น DRAFTFLAT constant (AR-Pri = DRAFTDRAFTFLAT) — ใช้ค่าเดิม ไม่ MAX ไม่ fuel
+    ar_pri = df.get("AR-Pri", pd.Series([""] * len(df), index=df.index)).fillna("")
+    is_draft_constant = (ar_pri == "DRAFTDRAFTFLAT") if apply_fuel else pd.Series([False]*len(df), index=df.index)
+
+    is_flat_compound = ctype.isin(["FLAT", "COMPOUND"]) & (~is_draft_constant)
     if is_flat_compound.any():
         sub = df[is_flat_compound].copy()
         sub["_rate"] = rate[is_flat_compound]
@@ -59,14 +63,19 @@ def _calc_side(df: pd.DataFrame, rate_col: str, total_col: str,
         max_by_load = sub.groupby("Load ID")["_rate"].transform("max")
         total[is_flat_compound] = max_by_load.values
 
+    # DRAFTFLAT constant (AR only): ใช้ AR Rate Charge ที่คำนวณไว้แล้ว (constant×pieces)
+    if is_draft_constant.any():
+        total[is_draft_constant] = rate[is_draft_constant]
+
     df[total_col] = total
 
-    # ── AR: × fuel surcharge ───────────────────────────────────────────────
+    # ── AR: × fuel surcharge (ยกเว้น DRAFTFLAT constant) ───────────────────
     if apply_fuel:
         surcharge = _to_num(df.get("Fuel Surcharge"), df.index)  # เช่น 0.0175 = 1.75%
-        # AR Total × (1 + surcharge)
         base = pd.to_numeric(df[total_col], errors="coerce")
-        df[total_col] = (base * (1 + surcharge)).where(base.notna(), None)
+        # คูณ fuel เฉพาะที่ไม่ใช่ DRAFTFLAT constant
+        multiplied = (base * (1 + surcharge)).where(base.notna(), None)
+        df[total_col] = base.where(is_draft_constant, multiplied)
 
     return df
 
