@@ -70,19 +70,16 @@ def run(stage1: dict, stage2: dict, draftflat_rate=None) -> pd.DataFrame:
 
     # ── เลือก 1 ชุดตาม Priority: Child(with) > Child(without) > Generic(with) > Generic(without)
     # return 3 คอลัมน์: AP Effective Date, AP Expiration Date, AP Rate Charge + AP Rate From
-    # NoItem ใช้เฉพาะ FLAT (fallback)
+    # Fallback ทำทุก charge (with → without item type)
     def _pick_ap(row):
-        is_flat = row.get("_is_flat")
-        # ลำดับ (suffix, ต้องเป็น flat ไหม, ชื่อ source)
+        # ลำดับ priority (suffix, ชื่อ source) — ทำทุก charge
         seq = [
-            ("_CHILD",    False, "Child"),        # Child with
-            ("_CHILD_NI", True,  "Child-NI"),     # Child without (flat only)
-            ("_GEN",      False, "Generic"),      # Generic with
-            ("_GEN_NI",   True,  "Generic-NI"),   # Generic without (flat only)
+            ("_CHILD",    "Child"),        # Child with item
+            ("_CHILD_NI", "Child-NI"),     # Child without item (fallback)
+            ("_GEN",      "Generic"),      # Generic with item
+            ("_GEN_NI",   "Generic-NI"),   # Generic without item (fallback)
         ]
-        for suf, need_flat, src in seq:
-            if need_flat and not is_flat:
-                continue
+        for suf, src in seq:
             rate = row.get(f"Rate{suf}")
             if pd.notna(rate):
                 return pd.Series({
@@ -104,11 +101,17 @@ def run(stage1: dict, stage2: dict, draftflat_rate=None) -> pd.DataFrame:
     main["AP Rate Source"]     = picked["AP Rate Source"]
     main["AP Rate From"]       = picked["AP Rate From"]
 
-    # ── Prime Status: mark with / without (เฉพาะ FLAT) ────────────────────
+    # ── Prime Status: mark with / without (ทุก charge) ────────────────────
+    # match with item → "Active with", fallback without item → "Active without"
     def _prime_status(row):
+        src = row.get("AP Rate Source")
         if row.get("Prime Status") == "Active":
-            return "Active with" if row.get("_is_flat") else "Active"
-        if row.get("_is_flat") and row.get("Prime Status NoItem") == "Active":
+            # ดู source ว่า match แบบ with หรือ without
+            if src in ("Child-NI", "Generic-NI"):
+                return "Active without"
+            return "Active with"
+        # Prime with ไม่เจอ แต่ noitem เจอ
+        if row.get("Prime Status NoItem") == "Active":
             return "Active without"
         return row.get("Prime Status")
     main["Prime Status"] = main.apply(_prime_status, axis=1)
