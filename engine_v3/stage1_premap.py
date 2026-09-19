@@ -47,7 +47,7 @@ def ap_prime_noitem(ap_df: pd.DataFrame) -> pd.DataFrame:
     เฉพาะแถวที่ charge เข้าเงื่อนไข FLAT (Left4=FLAT)
     """
     df = ap_df[ap_df.apply(_not_custpickup, axis=1)].copy()
-    df = df[df["Charge Code"].apply(keys.is_flat_fallback)]
+    # fallback ทำทุก charge (เดิมเฉพาะ FLAT)
     df["Pri-Columns2"] = df.apply(keys.ap_pri_columns_noitem, axis=1)
     out = df[["Pri-Columns2"]].drop_duplicates().copy()
     out["Prime Status NoItem"] = "Active"
