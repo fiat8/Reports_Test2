@@ -85,8 +85,7 @@ def build_ap_master_generic_noitem(ap_df: pd.DataFrame) -> pd.DataFrame:
     Pri-Columns2 → Eff/Exp/Rate. filter GENERIC + FLAT charge
     """
     mask = ap_df.apply(
-        lambda r: _not_custpickup(r) and _is_generic(r) and _not_stop(r)
-        and keys.is_flat_fallback(r.get("Charge Code")),
+        lambda r: _not_custpickup(r) and _is_generic(r) and _not_stop(r),
         axis=1,
     )
     df = ap_df[mask].copy()
@@ -100,8 +99,7 @@ def build_ap_master_child_noitem(ap_df: pd.DataFrame) -> pd.DataFrame:
     AP Master Child (without item type) — FLAT fallback
     """
     mask = ap_df.apply(
-        lambda r: _not_custpickup(r) and (not _is_generic(r)) and _not_stop(r)
-        and keys.is_flat_fallback(r.get("Charge Code")),
+        lambda r: _not_custpickup(r) and (not _is_generic(r)) and _not_stop(r),
         axis=1,
     )
     df = ap_df[mask].copy()
