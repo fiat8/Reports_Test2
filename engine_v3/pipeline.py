@@ -3,7 +3,7 @@
 # =============================================================================
 
 import pandas as pd
-from engine_v3 import stage1_premap, stage2_finalmap, stage3_return, fuel
+from engine_v3 import stage1_premap, stage2_finalmap, stage3_return, fuel, totals
 
 
 def run(lc_df: pd.DataFrame, ap_df: pd.DataFrame, ar_df: pd.DataFrame,
@@ -38,6 +38,9 @@ def run(lc_df: pd.DataFrame, ap_df: pd.DataFrame, ar_df: pd.DataFrame,
     if fuel_df is not None and not fuel_df.empty:
         fuel_ranges = fuel.build_fuel_ranges(fuel_df)
         result = fuel.map_fuel(result, fuel_ranges)
+
+    # ── Total Cost (CASE/FLAT/COMPOUND) + AR × fuel ───────────────────────
+    result = totals.add_totals(result)
 
     # พา original Load Confirm columns ไปด้วย (สำหรับ styling ตอน export)
     result.attrs["original_cols"] = lc_df.attrs.get("original_cols", [])
