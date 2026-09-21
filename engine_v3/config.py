@@ -30,6 +30,7 @@ CASE_CODES = {"CASEP", "CASE", "PS-CASE", "COD_CHARGE", "WEIGHT", "PALLET"}
 FLAT_CODES = {"CO", "FLAT", "FLATM", "DFTFREE", "FLATB", "SDFLAT",
               "FLATP", "AR_OVR", "FLATP_OVR", "AR_FLATP"}
 COMPOUND_CODES = {"DRAFTFLAT"}
+STEP_TYPE_CODES = {"STEP"}
 GENERIC_MARKER      = "GENERIC"          # Rate Tariff ID มีคำนี้ = Generic
 
 # SDFLAT special handling
