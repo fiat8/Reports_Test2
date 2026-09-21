@@ -3,7 +3,7 @@
 # =============================================================================
 
 import pandas as pd
-from engine_v3 import stage1_premap, stage2_finalmap, stage3_return, fuel, totals
+from engine_v3 import stage1_premap, stage2_finalmap, stage3_return, fuel, totals, step
 
 
 def run(lc_df: pd.DataFrame, ap_df: pd.DataFrame, ar_df: pd.DataFrame,
@@ -41,6 +41,9 @@ def run(lc_df: pd.DataFrame, ap_df: pd.DataFrame, ar_df: pd.DataFrame,
 
     # ── Total Cost (CASE/FLAT/COMPOUND) + AR × fuel ───────────────────────
     result = totals.add_totals(result)
+
+    # ── STEP Rate (sub-flow แยก, override แถว STEP) ───────────────────────
+    result = step.run(result, ap_df, ar_df)
 
     # พา original Load Confirm columns ไปด้วย (สำหรับ styling ตอน export)
     result.attrs["original_cols"] = lc_df.attrs.get("original_cols", [])
