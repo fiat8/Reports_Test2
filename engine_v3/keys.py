@@ -10,7 +10,7 @@ import pandas as pd
 from engine_v3.config import (
     LC, DRAFTFLAT_CODE, DRAFTFLAT_FROM, DRAFTFLAT_TO,
     CO_CODE, AR_CO_MARKER, DATE_EN_AU, FLAT_FALLBACK_PREFIX,
-    CASE_CODES, FLAT_CODES, COMPOUND_CODES,
+    CASE_CODES, FLAT_CODES, COMPOUND_CODES, STEP_TYPE_CODES,
 )
 
 
@@ -47,6 +47,8 @@ def charge_type(charge_code) -> str:
         return "FLAT"
     if c in COMPOUND_CODES:
         return "COMPOUND"
+    if c in STEP_TYPE_CODES:
+        return "STEP"
     return ""
 
 
