@@ -89,7 +89,9 @@ def _arrange(df, orig_cols):
     # LC เรียงตามต้นฉบับก่อน แล้ว Charge Type ต่อท้าย (ก่อนโซน AP)
     lc_orig = [c for c in orig_cols if c in lc]
     lc_extra = [c for c in lc if c not in orig_set and c != "Charge Type"]
-    lc_ordered = lc_orig + lc_extra + (["Charge Type"] if "Charge Type" in lc else [])
+    lc_tail = [c for c in ["Charge Type","Load Qty"] if c in lc]
+    lc_extra2 = [c for c in lc_extra if c not in ("Charge Type","Load Qty")]
+    lc_ordered = lc_orig + lc_extra2 + lc_tail
     # AP / AR เรียงตามลำดับที่กำหนด
     ap_ordered = _order_zone(ap, AP_ORDER)
     ar_ordered = _order_zone(ar, AR_ORDER)
