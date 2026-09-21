@@ -26,6 +26,14 @@ def _not_custpickup(row):
 # =============================================================================
 # สร้าง Master STEP + Range From
 # =============================================================================
+def _find_range_to(df: pd.DataFrame) -> str:
+    """หา column 'Range To' แบบ case-insensitive (รองรับ Range To / Range to / RANGE TO)"""
+    for c in df.columns:
+        if str(c).strip().lower() == "range to":
+            return c
+    return None
+
+
 def build_step_master(rate_df: pd.DataFrame, side: str) -> pd.DataFrame:
     """
     สร้าง STEP master จาก AP/AR rate
@@ -46,14 +54,20 @@ def build_step_master(rate_df: pd.DataFrame, side: str) -> pd.DataFrame:
             return pd.DataFrame(columns=["Pri-Columns", "Effective Date", "Expiration Date",
                                          "Rate", "Range From", "Range To"])
         df["Pri-Columns"] = df.apply(keys.ap_pri_columns, axis=1)
-        eff, exp, rate, rangeto = "Effective Date", "Expiration Date", "Rate", "Range To"
+        eff, exp, rate = "Effective Date", "Expiration Date", "Rate"
+        rangeto = _find_range_to(df)
     else:  # AR
         df = df[df["CHARGE_ID"].apply(lambda x: s(x) == STEP_CODE)]
         if df.empty:
             return pd.DataFrame(columns=["Pri-Columns", "EFFECTIVEDATE", "EXPIRATIONDATE",
                                          "RATE", "Range From", "Range To"])
         df["Pri-Columns"] = df.apply(keys.ar_pri_columns, axis=1)
-        eff, exp, rate, rangeto = "EFFECTIVEDATE", "EXPIRATIONDATE", "RATE", "Range To"
+        eff, exp, rate = "EFFECTIVEDATE", "EXPIRATIONDATE", "RATE"
+        rangeto = _find_range_to(df)
+
+    # ถ้าไม่เจอ column Range To → คืน master ว่าง (STEP ทำไม่ได้)
+    if rangeto is None:
+        return pd.DataFrame(columns=["Pri-Columns", eff, exp, rate, "Range From", "Range To"])
 
     # Range To เป็นตัวเลข
     df[rangeto] = pd.to_numeric(df[rangeto], errors="coerce")
