@@ -52,8 +52,11 @@ def build_step_master(rate_df: pd.DataFrame, side: str) -> pd.DataFrame:
         df = df[df.apply(_not_custpickup, axis=1)]
         if df.empty:
             return pd.DataFrame(columns=["Pri-Columns", "Effective Date", "Expiration Date",
-                                         "Rate", "Range From", "Range To"])
+                                         "Rate", "Range From", "Range To", "TYPE"])
         df["Pri-Columns"] = df.apply(keys.ap_pri_columns, axis=1)
+        # TYPE = GENERIC ถ้า Rate Tariff ID มี "GENERIC" ไม่งั้น CHILD
+        df["_TYPE"] = df["Rate Tariff ID"].apply(
+            lambda x: "GENERIC" if "GENERIC" in s(x).upper() else "CHILD")
         eff, exp, rate = "Effective Date", "Expiration Date", "Rate"
         rangeto = _find_range_to(df)
     else:  # AR
@@ -72,18 +75,24 @@ def build_step_master(rate_df: pd.DataFrame, side: str) -> pd.DataFrame:
     # Range To เป็นตัวเลข
     df[rangeto] = pd.to_numeric(df[rangeto], errors="coerce")
 
-    # สร้าง Range From ต่อ Pri-Columns (sort Range To → From = prev+1, ตัวแรก=0)
+    # สร้าง Range From ต่อ [Pri-Columns + Effective + Expiration (+TYPE ถ้า AP)]
+    # (แยก version วันที่ ไม่งั้น Range From เพี้ยนเมื่อมีหลาย version)
+    has_type = "_TYPE" in df.columns
+    group_cols = ["Pri-Columns", eff, exp] + (["_TYPE"] if has_type else [])
     out_rows = []
-    for pricol, grp in df.groupby("Pri-Columns"):
+    for keyvals, grp in df.groupby(group_cols):
         g = grp.sort_values(rangeto).reset_index(drop=True)
-        prev_to = -1  # ทำให้ตัวแรก From = 0
+        prev_to = -1  # ตัวแรก From = 0
         for _, r in g.iterrows():
             rf = prev_to + 1
-            out_rows.append({
-                "Pri-Columns": pricol,
+            rec = {
+                "Pri-Columns": r["Pri-Columns"],
                 eff: r[eff], exp: r[exp], rate: r[rate],
                 "Range From": rf, "Range To": r[rangeto],
-            })
+            }
+            if has_type:
+                rec["TYPE"] = r["_TYPE"]
+            out_rows.append(rec)
             prev_to = r[rangeto]
 
     return pd.DataFrame(out_rows)
@@ -153,7 +162,12 @@ def find_step_rate(main: pd.DataFrame, master: pd.DataFrame, side: str,
             (lq >= cand["Range From"]) & (lq <= cand["Range To"])
         ]
         if not hit.empty:
-            row = hit.iloc[0]
+            # AP: เลือก Child ก่อน Generic
+            if side == "AP" and "TYPE" in hit.columns:
+                child = hit[hit["TYPE"] == "CHILD"]
+                row = child.iloc[0] if not child.empty else hit.iloc[0]
+            else:
+                row = hit.iloc[0]
             result.at[idx, "STEP Rate"] = row[rate]
             result.at[idx, "STEP Eff"]  = row[eff]
             result.at[idx, "STEP Exp"]  = row[exp]
